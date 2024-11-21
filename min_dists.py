@@ -82,8 +82,7 @@ class min_dist_2D:
         """
         Sensitivity analysis through cvxpy
         Returns: tuple(np.array, np.array) | [arr(nabla_cxa_L, nabla_cya_L), arr(nabla_cya_L, nabla_cyb_L)]
-        """
-        """
+
         More generally, the backward method can be used to compute the gradient of a scalar-valued function f of the
         optimal variables, with respect to the parameters. If x(p) denotes the optimal value of the variable
         (which might be a vector or a matrix) for a particular value of the parameter p and f(x(p)) is a scalar, then
