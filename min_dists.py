@@ -41,16 +41,29 @@ class min_dist_2D:
     def get_primal_dual_solutions(self):
         """
         Get the points where the minimum distance occurs and the corresponding dual variables
-        Returns: (points on xa, dual value for xa, points on xb, dual value for xb)
+        Returns: tuple(np.array, float, np.array, float) | (points on xa, dual value for xa,
+                                                            points on xb, dual value for xb)
         """
         self.prob.solve(solver='SCS', requires_grad=True)
         # self.prob.solve(solver='CLARABEL')
         return self.xa.value.squeeze(), self.constraints[0].dual_value, self.xb.value.squeeze(), self.constraints[1].dual_value
 
+    def get_optimal_value(self):
+        """
+        Obtain objective function given after the optimal solution has been found
+        Returns: float | Square of the distance function given the optimal solutions
+        """
+        return (self.xa[0, 0] - self.xb[0, 0])**2 + (self.xa[1, 0] - self.xb[1, 0])**2
+
 
     def set_params(self, cxa, cya, cxb, cyb):
         """
         Set the new centre positions of each shape
+        Args:
+            cxa: float | x position vector of shape a
+            cya: float | y position vector of shape a
+            cxb: float | x position vector of shape b
+            cyb: float | y position vector of shape b
         """
         self.cxa.value = np.array([[cxa, cya]]).transpose()
         self.cxb.value = np.array([[cxb, cyb]]).transpose()
@@ -58,7 +71,7 @@ class min_dist_2D:
     def sensitivity_analysis(self):
         """
         Return the gradient of Lagrangian wrt problem parameters
-        Returns: [nabla_cxa_L, nabla_cya_L, nabla_cya_L, nabla_cyb_L]
+        Returns: list(float..)  | [nabla_cxa_L, nabla_cya_L, nabla_cya_L, nabla_cyb_L]
         """
         return [-2*self.constraints[0].dual_value*((self.xa.value[0, 0] - self.cxa.value[0, 0]) / self.aa**2),
                 -2*self.constraints[0].dual_value*((self.xa.value[1, 0] - self.cxa.value[1, 0]) / self.ba**2),
@@ -67,11 +80,22 @@ class min_dist_2D:
 
     def sensitivity_cvxpy(self):
         """
-        TODO: understand if I need backward or derivative
         Sensitivity analysis through cvxpy
-        Returns: [nabla_cxa_L, nabla_cya_L, nabla_cya_L, nabla_cyb_L]
+        Returns: tuple(np.array, np.array) | [arr(nabla_cxa_L, nabla_cya_L), arr(nabla_cya_L, nabla_cyb_L)]
         """
-        self.cxa.delta = 1e-5
-        self.cxb.delta = 1e-5
-        self.prob.derivative()
-        print(self.xa.delta)
+        """
+        More generally, the backward method can be used to compute the gradient of a scalar-valued function f of the
+        optimal variables, with respect to the parameters. If x(p) denotes the optimal value of the variable
+        (which might be a vector or a matrix) for a particular value of the parameter p and f(x(p)) is a scalar, then
+        backward can be used to compute the gradient of f with respect to p. Let x* = x(p), and say the derivative of f
+        with respect to x* is dx. To compute the derivative of f with respect to p, before calling problem.backward(),
+        just set x.gradient = dx.
+
+        The backward method can be powerful when combined with software for automatic differentiation. We recommend the
+        software package CVXPY Layers, which provides differentiable PyTorch and TensorFlow wrappers for CVXPY problems.
+        """
+        delta_x = 2*(self.xa - self.xb)  # Gradient of objective function wrt decision variables
+        self.xa.gradient = delta_x.value
+        self.xb.gradient = -delta_x.value
+        self.prob.backward()
+        return self.cxa.gradient.squeeze(), self.cxb.gradient.squeeze()

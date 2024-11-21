@@ -6,7 +6,7 @@ from numpy.ma.testutils import assert_almost_equal
 
 from min_dists import min_dist_2D
 
-PERTURBATION = 1e-6
+PERTURBATION = 1e-4
 
 def ellipse_2d_handwritten_check():
     """
@@ -88,8 +88,24 @@ def ellipse_2d_numerical_diff():
 
     obj = min_dist_2D(cxa, cya, cxb, cyb, 0.2, 0.5, 0.5, 0.4)
     obj.get_primal_dual_solutions()
-    print("actual:   ", obj.sensitivity_analysis())
-    print(f"numerical: [{nabla_cxa}, {nabla_cya}, {nabla_cxb}, {nabla_cyb}]")
+
+    # Obtain analytic gradient and cvxpy predicted
+    analytic_tmp =  obj.sensitivity_analysis()
+    tmp = obj.sensitivity_cvxpy()
+
+    # Reformat data for easy reading when printed
+    analytic = [round(i, 6) for i in analytic_tmp]
+    cvxpy_pred = [round(i, 6) for i in tmp[0].tolist()]
+    cvxpy_pred.extend([round(i, 6) for i in tmp[1].tolist()])
+    nabla_cxa = round(nabla_cxa, 6)
+    nabla_cya = round(nabla_cya, 6)
+    nabla_cxb = round(nabla_cxb, 6)
+    nabla_cyb = round(nabla_cyb, 6)
+    # Print solutions
+    print("gradients:")
+    print("actual           ", analytic)
+    print("cvxpy predicted: ", cvxpy_pred)
+    print(f"numerical diff:   [{nabla_cxa}, {nabla_cya}, {nabla_cxb}, {nabla_cyb}]")
 
 # ellipse_2d_handwritten_check()
-ellipse_2d_numerical_diff()
+# ellipse_2d_numerical_diff()
