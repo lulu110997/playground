@@ -53,7 +53,7 @@ class min_dist_2D:
         Obtain objective function given after the optimal solution has been found
         Returns: float | Square of the distance function given the optimal solutions
         """
-        return (self.xa[0, 0] - self.xb[0, 0])**2 + (self.xa[1, 0] - self.xb[1, 0])**2
+        return ((self.xa[0, 0] - self.xb[0, 0])**2 + (self.xa[1, 0] - self.xb[1, 0])**2).value
 
 
     def set_params(self, cxa, cya, cxb, cyb):
