@@ -1,11 +1,8 @@
 """
 Sanity checks
 """
-from ctypes.wintypes import PRECT
 
-import numpy as np
 from numpy.ma.testutils import assert_almost_equal
-from scipy.stats import alpha
 
 from min_dists import min_dist_2D
 import numpy as np
@@ -178,6 +175,6 @@ def gradient_check_2d(plot=False):
             plt.axis('scaled')
             plt.show()
 
-# ellipse_2d_handwritten_check(True)
-# ellipse_2d_numerical_diff()
-# gradient_check_2d(True)
+ellipse_2d_handwritten_check(0)
+ellipse_2d_numerical_diff()
+gradient_check_2d(0)

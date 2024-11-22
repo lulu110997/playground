@@ -27,7 +27,7 @@ class min_dist_2D:
         self.bb = bb
 
         # Objective
-        self.objective = cp.Minimize(cp.square(self.xa - self.xb))
+        self.objective = cp.Minimize(cp.sum_squares(self.xa - self.xb))
 
         # Constraints, variables must lie on the surface of the sq
         self.constraints = [
