@@ -27,7 +27,7 @@ class min_dist_2D:
         self.bb = bb
 
         # Objective
-        objective = cp.Minimize(cp.sum_squares(self.xa - self.xb))
+        self.objective = cp.Minimize(cp.square(self.xa - self.xb))
 
         # Constraints, variables must lie on the surface of the sq
         self.constraints = [
@@ -36,7 +36,7 @@ class min_dist_2D:
         ]
 
         # Problem
-        self.prob = cp.Problem(objective, self.constraints)
+        self.prob = cp.Problem(self.objective, self.constraints)
 
     def get_primal_dual_solutions(self):
         """
@@ -53,7 +53,7 @@ class min_dist_2D:
         Obtain objective function given after the optimal solution has been found
         Returns: float | Square of the distance function given the optimal solutions
         """
-        return ((self.xa[0, 0] - self.xb[0, 0])**2 + (self.xa[1, 0] - self.xb[1, 0])**2).value
+        return self.objective.value
 
 
     def set_params(self, cxa, cya, cxb, cyb):
