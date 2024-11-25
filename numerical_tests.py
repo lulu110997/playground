@@ -4,7 +4,7 @@ Sanity checks
 
 from numpy.ma.testutils import assert_almost_equal
 
-from min_dists import min_dist_2D
+from min_dists import MinDist2D
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.patches import Ellipse
@@ -16,7 +16,7 @@ def ellipse_2d_handwritten_check(plot=False):
     # Define centres of SQ
     cxa, cya, cxb, cyb = 0.3, 1, 2.5, -0.1
     aa, ab, ba, bb = 0.2, 0.5, 0.5, 0.4
-    obj = min_dist_2D(cxa, cya, cxb, cyb, aa, ab, ba, bb)
+    obj = MinDist2D(cxa, cya, cxb, cyb, aa, ab, ba, bb)
     xa, lambda_a ,xb, lambda_b = obj.get_primal_dual_solutions()
     analytic_tmp = obj.sensitivity_analysis()
 
@@ -57,7 +57,7 @@ def ellipse_2d_numerical_diff():
     aa, ba, ab, bb = 0.2, 0.5, 0.5, 0.4
 
     # Text for nabla_cxa
-    obj = min_dist_2D(cxa-PERTURBATION, cya, cxb, cyb, aa, ba, ab, bb)
+    obj = MinDist2D(cxa-PERTURBATION, cya, cxb, cyb, aa, ba, ab, bb)
     xa, __ ,xb, __ = obj.get_primal_dual_solutions()
     dist_minus = (xa[0] - xb[0])**2 + (xa[1] - xb[1])**2
 
@@ -68,7 +68,7 @@ def ellipse_2d_numerical_diff():
     nabla_cxa = (dist_plus - dist_minus)/(2*PERTURBATION)
 
     # Text for nabla_cya
-    obj = min_dist_2D(cxa, cya - PERTURBATION, cxb, cyb, aa, ba, ab, bb)
+    obj = MinDist2D(cxa, cya - PERTURBATION, cxb, cyb, aa, ba, ab, bb)
     xa, __, xb, __ = obj.get_primal_dual_solutions()
     dist_minus = (xa[0] - xb[0]) ** 2 + (xa[1] - xb[1]) ** 2
 
@@ -79,7 +79,7 @@ def ellipse_2d_numerical_diff():
     nabla_cya = (dist_plus - dist_minus) / (2 * PERTURBATION)
 
     # Text for nabla_cxb
-    obj = min_dist_2D(cxa, cya, cxb - PERTURBATION, cyb, aa, ba, ab, bb)
+    obj = MinDist2D(cxa, cya, cxb - PERTURBATION, cyb, aa, ba, ab, bb)
     xa, __, xb, __ = obj.get_primal_dual_solutions()
     dist_minus = (xa[0] - xb[0]) ** 2 + (xa[1] - xb[1]) ** 2
 
@@ -90,7 +90,7 @@ def ellipse_2d_numerical_diff():
     nabla_cxb = (dist_plus - dist_minus) / (2 * PERTURBATION)
 
     # Text for nabla_cyb
-    obj = min_dist_2D(cxa, cya, cxb, cyb - PERTURBATION, aa, ba, ab, bb)
+    obj = MinDist2D(cxa, cya, cxb, cyb - PERTURBATION, aa, ba, ab, bb)
     xa, __, xb, __ = obj.get_primal_dual_solutions()
     dist_minus = (xa[0] - xb[0]) ** 2 + (xa[1] - xb[1]) ** 2
 
@@ -100,7 +100,7 @@ def ellipse_2d_numerical_diff():
 
     nabla_cyb = (dist_plus - dist_minus) / (2 * PERTURBATION)
 
-    obj = min_dist_2D(cxa, cya, cxb, cyb, 0.2, 0.5, 0.5, 0.4)
+    obj = MinDist2D(cxa, cya, cxb, cyb, 0.2, 0.5, 0.5, 0.4)
     obj.get_primal_dual_solutions()
 
     # Obtain analytic gradient and cvxpy predicted
@@ -149,7 +149,7 @@ def gradient_check_2d(plot=False):
 
     for cxa, cya, cxb, cyb, aa, ba, ab, bb in params:
         # Create problem
-        obj = min_dist_2D(cxa, cya, cxb, cyb, aa, ba, ab, bb)
+        obj = MinDist2D(cxa, cya, cxb, cyb, aa, ba, ab, bb)
 
         # Obtain solution and gradients
         xa, lambda_a, xb, lambda_b = obj.get_primal_dual_solutions()

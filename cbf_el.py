@@ -5,10 +5,10 @@ from roboticstoolbox.tools import trajectory
 from spatialmath import SE2
 import sympy as sym
 from qpsolvers import solve_ls
-from min_dists import min_dist_2D
+from min_dists import MinDist2D
 
 # CBF param
-GAMMA = 10.0  # Used in CBF calculation
+GAMMA = 1.0  # Used in CBF calculation
 
 # P gain
 K = 1.0  # P gain for position controller
@@ -76,8 +76,8 @@ x_an_history[0, :] = xa_init
 x_opt_history[0, :] = xa_init
 
 # Create optimiser
-obj = min_dist_2D(cxa=xa_init[0], cya=xa_init[1], cxb=xb_init[0], cyb=xb_init[1],
-                  aa=Ra[0], ba=Ra[1], ab=Rb[0], bb=Rb[1])
+obj = MinDist2D(cxa=xa_init[0], cya=xa_init[1], cxb=xb_init[0], cyb=xb_init[1],
+                aa=Ra[0], ba=Ra[1], ab=Rb[0], bb=Rb[1])
 
 # Control loop
 for idx in range(1, STEPS):

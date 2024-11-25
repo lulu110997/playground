@@ -7,11 +7,11 @@ import time
 import cvxpy as cp
 import numpy as np
 
-class min_dist_2D:
+class MinDist2D:
     """
     Class for calculating the minimum distance between two ellipse type shapes
     """
-    def __init__(self, cxa, cya, cxb, cyb, aa, ba, ab, bb):
+    def __init__(self, cxa, cya, cxb, cyb, aa, ba, ab, bb, objective="SOS"):
         # Decision variables
         self.xa = cp.Variable((2,1))  # Point on SQ a
         self.xb = cp.Variable((2,1))  # Point on SQ b
@@ -27,7 +27,10 @@ class min_dist_2D:
         self.bb = bb
 
         # Objective
-        self.objective = cp.Minimize(cp.norm(self.xa - self.xb))
+        if objective == "SOS":
+            self.objective = cp.Minimize(cp.sum_squares(self.xa - self.xb))
+        else:
+            self.objective = cp.Minimize(cp.norm(self.xa - self.xb))
 
         # Constraints, variables must lie on the surface of the sq
         self.constraints = [
