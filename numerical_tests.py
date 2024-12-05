@@ -3,15 +3,18 @@ Sanity checks
 """
 
 from numpy.ma.testutils import assert_almost_equal
-
-from min_dists import MinDist2D
+from superquadric import SuperquadricObject
+from min_dists import MinDist2D, MinDist3D_transl
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.patches import Ellipse
 
+###################################################### 2D tests ########################################################
+
 def ellipse_2d_handwritten_check(plot=False):
     """
     Checking we coded things correctly by validating code results with handwritten result and optimal points from ipopt
+    These tests use SOS as the objective function which is an equivalent problem for what we are looking for
     """
     # Define centres of SQ
     cxa, cya, cxb, cyb = 0.3, 1, 2.5, -0.1
@@ -48,6 +51,7 @@ def ellipse_2d_numerical_diff():
     """
     https://en.wikipedia.org/wiki/Numerical_differentiation
     Use two-point formula to check the derivatives we compute is correct
+    These tests use SOS as the objective function which is an equivalent problem for what we are looking for
     """
     PERTURBATION = 1e-4
     # Define centres of SQ
@@ -133,6 +137,8 @@ def gradient_check_2d(plot=False):
     is more significant than the rate of change of a bigger circle)
     - Keeping the radius constant but moving two circle closer will result in the values decreasing since a small
     movement of the circle will result in a less drastic change in the point moving along the surface
+
+    - These tests use SOS as the objective function which is an equivalent problem for what we are looking for
     """
     # Define centres and radii of SQ
     params = [
@@ -175,6 +181,87 @@ def gradient_check_2d(plot=False):
             plt.axis('scaled')
             plt.show()
 
-ellipse_2d_handwritten_check(0)
-ellipse_2d_numerical_diff()
-gradient_check_2d(0)
+# ellipse_2d_handwritten_check(0)
+# ellipse_2d_numerical_diff()
+# gradient_check_2d(0)
+
+###################################################### 3D tests ########################################################
+
+def ellipse_test_transl(plot=False):
+    """
+    Uses eps=1 and quat=(1,0,0,0). Check distance with only translation
+    These tests revealed that we needed to use abs on the numerator of the inside outside function
+    """
+    params = [
+        # ca, cb, ra, rb, eps_a, eps_b
+        [(0, 0.0, 0), (1, 0, 0), (0.1, 0.2, 0.3), (0.25, 0.5, 0.15), (1, 1), (1, 1)], # T1
+        [(0, 0.4, 0), (1, 0, 0), (0.1, 0.2, 0.3), (0.25, 0.5, 0.15), (1, 1), (1, 1)], # T2
+        [(-1.0, -3.8, 0.9), (-1.0, 0.6, -1.7),  (1, 1.2, 0.9), (1.25, 1.5, 1.15), (1, 1), (1, 1)],
+        [(-2, -0.5, -0.4), (-2, -0.4, 0.8), (0.2, 0.1, 0.4), (0.15, 0.5, 0.3), (1, 1), (1, 1)],
+        [(-1, -0.9, 0.9), (1, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (0.5, 1), (1, 1)],
+        [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (0.5, 1.0), (1.8, 2.0)],
+
+        [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (0.1, 1.0), (2.0, 2.0)],  # Not works_a1
+        [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (1.0, 1.0), (1.0, 1.0)],  # Encapsulating ellipsoids
+        [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (0.2, 1.0), (1.9, 1.9)],  # eps_b less than two works but 0.2 and 0.1 for eps_a[0] does not work (smth to do with curvature??)
+        [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (0.1, 1.0), (1.9, 1.9)],   # 0.1
+        [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (0.25, 1.0), (1.9, 1.9)],  # i think works?
+
+        [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 0.5, 0.9), (1.25, 1.5, 1.15), (0.25, 1.0), (0.1, 0.9)],  # Not works_a2
+        [(-1.0, -0.9, 0.9), (-1.0, -0.5, -1.7), (1, 0.5, 0.9), (1.25, 1.5, 1.15), (0.25, 1.0), (0.1, 0.9)],  # Not works_a3
+        [(-1.0, 1.9, 0.9), (-1.0, 0.5, -1.7), (1, 0.5, 0.9), (1.25, 1.5, 1.15), (0.25, 1.0), (0.1, 0.9)],  # Shape on RHS is fine
+        [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (1.0, 1.0), (0.9, 0.9)]  # Not works_a4
+    ]
+
+    for ca, cb, ra, rb, eps_a, eps_b in params:
+        # Create sq object
+        s1 = SuperquadricObject(*ra, *eps_a, pos=ca, quat=(1, 0, 0, 0))
+        s2 = SuperquadricObject(*rb, *eps_b, pos=cb, quat=(1, 0, 0, 0))
+
+        # Create optimisation problem
+        optimiser = MinDist3D_transl(ca, cb, ra, rb, eps_a, eps_b, objective="NORM")
+
+        xa, lagr_a, xb, lagr_b = optimiser.get_primal_dual_solutions()
+
+        if plot:
+            ax = plt.subplot(111, projection='3d')
+            s1.plot_sq(ax, 'green')
+            s2.plot_sq(ax, 'red')
+            ax.plot((xa[0], xb[0]), (xa[1], xb[1]), (xa[2], xb[2]), 'ro-')
+            plt.xlabel('x-axis')
+            ax.axis('scaled')
+            plt.show(block=True)
+
+def ellipse_test_rot(plot=False):
+    """
+    Uses eps=1 and quat=(1,0,0,0). Check distance with only translation
+    """
+    # Define centres and radii of SQ
+    params = [
+        # ca, cb, ra, rb, eps_a, eps_b, qa, qb
+        # [(0, 0, 0), (1, 0, 0), (0.1, 0.2, 0.3), (0.25, 0.5, 0.15), (1, 1), (1, 1), (0.9238795, 0, 0, 0.3826834), (1, 0, 0, 0)],
+        [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.1, 0.2, 0.3), (0.25, 0.5, 0.15), (1.0, 1.0), (1.0, 1.0), (0.9238795, 0.0, 0.0, 0.3826834), (0.9238795, 0.0, 0.0, -0.3826834)]
+
+    ]
+
+    for ca, cb, ra, rb, eps_a, eps_b, qa, qb in params:
+        # Create sq object
+        s1 = SuperquadricObject(*ra, *eps_a, pos=ca, quat=qa)
+        s2 = SuperquadricObject(*rb, *eps_b, pos=cb, quat=qb)
+
+        # Create optimisation problem
+        optimiser = MinDist3D(ca, cb, ra, rb, eps_a, eps_b, qa, qb, objective="NORM")
+
+        xa, lagr_a, xb, lagr_b = optimiser.get_primal_dual_solutions()
+
+        if plot:
+            fig = plt.figure()
+            ax = fig.add_subplot(111, projection='3d')
+            s1.plot_sq(ax, 'green')
+            s2.plot_sq(ax, 'red')
+            plt.plot((xa[0], xb[0]), (xa[1], xb[1]), (xa[2], xb[2]), 'ro-')
+            plt.xlabel('x-axis')
+            print(lagr_a, lagr_b)
+            plt.show()
+
+ellipse_test_transl(1)

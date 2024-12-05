@@ -18,7 +18,7 @@ Ra = (0.6, 0.2)  # Circle radius
 Rb = (0.2, 0.7)  # Radius around the EE
 
 # Initial and target shape positions
-xa_init = (-1.0, -0.0)  # Obstacle position
+xa_init = (-10.0, -0.0)  # Obstacle position
 xb_init = (-0.1, 0.4)  # Obstacle position
 xa_tgt = (1.0, 0)  # Final position
 
