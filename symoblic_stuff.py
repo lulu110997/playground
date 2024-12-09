@@ -1,7 +1,7 @@
 import numpy as np
 from sympy.matrices import Matrix, eye, zeros, ones, diag, MatrixSymbol
 from sympy import symbols, diff, sqrt
-
+from sympy.geometry import Ellipse
 
 
 def attempt1():
@@ -128,65 +128,50 @@ def kkt_conditions(xa_sol, xb_sol, ca_sol, cb_sol, ra_sol, rb_sol, eps_a_sol, ep
 
     f1 = ((xa_w + ya_w) ** (eps_a[1] / eps_a[0])) + za_w - 1
     f2 = ((xb_w + yb_w) ** (eps_b[1] / eps_b[0])) + zb_w - 1
-    f2 = (xb[1] - cb[1]) / rb[1]
-    print(f2.subs({xa: Matrix(xa_sol), xb: Matrix(xb_sol),
+
+    # Dual feasibility
+    print("dual feasibility (nu >=0):", nu.subs({nu: Matrix(nu_sol)}).doit())
+
+    # Complementary slackness
+    f1_nu = f1*nu[0]
+    f1_nu = f1_nu.subs({xa: Matrix(xa_sol), xb: Matrix(xb_sol),
+                        ca: Matrix(ca_sol), cb: Matrix(cb_sol),
+                        ra: Matrix(ra_sol), rb: Matrix(rb_sol),
+                        eps_a: Matrix(eps_a_sol), eps_b: Matrix(eps_b_sol),
+                        nu: Matrix(nu_sol)
+                        }).doit()
+    f2_nu = f2*nu[0]
+    f2_nu = f2_nu.subs({xa: Matrix(xa_sol), xb: Matrix(xb_sol),
+                        ca: Matrix(ca_sol), cb: Matrix(cb_sol),
+                        ra: Matrix(ra_sol), rb: Matrix(rb_sol),
+                        eps_a: Matrix(eps_a_sol), eps_b: Matrix(eps_b_sol),
+                        nu: Matrix(nu_sol)
+                        }).doit()
+    print("Complementary slackness (f1*nu1+f2*nu2=0)", f1_nu+f2_nu)
+
+
+    # Primal feasibility
+    print(f"primal feasibility for SQ_a",
+          f1.subs({xa: Matrix(xa_sol), xb: Matrix(xb_sol),
                    ca: Matrix(ca_sol), cb: Matrix(cb_sol),
                    ra: Matrix(ra_sol), rb: Matrix(rb_sol),
                    eps_a: Matrix(eps_a_sol), eps_b: Matrix(eps_b_sol),
                    nu: Matrix(nu_sol)
                    }).doit())
-    primal_feasibility = (f1.subs({xa: Matrix(xa_sol), xb: Matrix(xb_sol),
-                                   ca: Matrix(ca_sol), cb: Matrix(cb_sol),
-                                   ra: Matrix(ra_sol), rb: Matrix(rb_sol),
-                                   eps_a: Matrix(eps_a_sol), eps_b: Matrix(eps_b_sol),
-                                   nu: Matrix(nu_sol)}).doit() <= 1e-8 and
-                          f2.subs({xa: Matrix(xa_sol), xb: Matrix(xb_sol),
-                                   ca: Matrix(ca_sol), cb: Matrix(cb_sol),
-                                   ra: Matrix(ra_sol), rb: Matrix(rb_sol),
-                                   eps_a: Matrix(eps_a_sol), eps_b: Matrix(eps_b_sol),
-                                   nu: Matrix(nu_sol)
-                                   }).doit() <= 1e-8
-                          )
+    print(f"primal feasibility for SQ_b",
+          f2.subs({xa: Matrix(xa_sol), xb: Matrix(xb_sol),
+                   ca: Matrix(ca_sol), cb: Matrix(cb_sol),
+                   ra: Matrix(ra_sol), rb: Matrix(rb_sol),
+                   eps_a: Matrix(eps_a_sol), eps_b: Matrix(eps_b_sol),
+                   nu: Matrix(nu_sol)
+                   }).doit())
 
-    return
-    print(f"primal feasibility: {primal_feasibility}")
-    if not primal_feasibility:
-        print(f1.subs({xa: Matrix(xa_sol), xb: Matrix(xb_sol),
-                           ca: Matrix(ca_sol), cb: Matrix(cb_sol),
-                           ra: Matrix(ra_sol), rb: Matrix(rb_sol),
-                           eps_a: Matrix(eps_a_sol), eps_b: Matrix(eps_b_sol),
-                           nu: Matrix(nu_sol)
-                           }).doit())
-        print(f2.subs({xa: Matrix(xa_sol), xb: Matrix(xb_sol),
-                           ca: Matrix(ca_sol), cb: Matrix(cb_sol),
-                           ra: Matrix(ra_sol), rb: Matrix(rb_sol),
-                           eps_a: Matrix(eps_a_sol), eps_b: Matrix(eps_b_sol),
-                           nu: Matrix(nu_sol)
-                           }).doit())
-
+    # Stationarity condition
     f0_diff = f0.diff(xa)
     f1_diff = Matrix([f1.diff(xa[0]), f1.diff(xa[1]), f1.diff(xa[2])])
     f2_diff = Matrix([f2.diff(xa[0]), f2.diff(xa[1]), f2.diff(xa[2])])
     dL_dxa = f0_diff + nu[0]*f1_diff + nu[1]*f2_diff
     print("stationarity condition")
-    # print(f0_diff.subs({xa: Matrix(xa_sol), xb: Matrix(xb_sol),
-    #                    ca: Matrix(ca_sol), cb: Matrix(cb_sol),
-    #                    ra: Matrix(ra_sol), rb: Matrix(rb_sol),
-    #                    eps_a: Matrix(eps_a_sol), eps_b: Matrix(eps_b_sol),
-    #                    nu: Matrix(nu_sol)
-    #                    }).doit())
-    # print(f1_diff.subs({xa: Matrix(xa_sol), xb: Matrix(xb_sol),
-    #                    ca: Matrix(ca_sol), cb: Matrix(cb_sol),
-    #                    ra: Matrix(ra_sol), rb: Matrix(rb_sol),
-    #                    eps_a: Matrix(eps_a_sol), eps_b: Matrix(eps_b_sol),
-    #                    nu: Matrix(nu_sol)
-    #                    }).doit())
-    # print(f2_diff.subs({xa: Matrix(xa_sol), xb: Matrix(xb_sol),
-    #                    ca: Matrix(ca_sol), cb: Matrix(cb_sol),
-    #                    ra: Matrix(ra_sol), rb: Matrix(rb_sol),
-    #                    eps_a: Matrix(eps_a_sol), eps_b: Matrix(eps_b_sol),
-    #                    nu: Matrix(nu_sol)
-    #                    }).doit())
     print(dL_dxa.subs({xa: Matrix(xa_sol), xb: Matrix(xb_sol),
                        ca: Matrix(ca_sol), cb: Matrix(cb_sol),
                        ra: Matrix(ra_sol), rb: Matrix(rb_sol),
@@ -196,73 +181,65 @@ def kkt_conditions(xa_sol, xb_sol, ca_sol, cb_sol, ra_sol, rb_sol, eps_a_sol, ep
 
     print()
 
+print("Baseline")
+# (0, 0.4, -0.2) (1, 0, 0) (0.1, 0.2, 0.3) (0.25, 0.5, 0.15) (1, 1) (1, 1)
+# [ 0.08711657  0.32866006 -0.09878141] 0.05578323714091425 [ 0.76923862  0.18899438 -0.01072417] 0.13162102312957683
+# 0.701819824489615
+ca = np.array([(0, 0.4, -0.2)])
+cb = np.array([(1, 0, 0)])
+ra = np.array([[0.1, 0.2, 0.3]])
+rb = np.array([[0.25, 0.5, 0.15]])
+eps_a = np.array([[1.0, 1.0]])
+eps_b = np.array([[1.0, 1.0]])
+xa = np.array([[0.08711657, 0.32866006, -0.09878141]])
+xb = np.array([[0.76923862, 0.18899438,   -0.01072417] ])
+nu = np.array([0.05578323714091425, 0.13162102312957683])
+kkt_conditions(xa, xb, ca, cb, ra, rb, eps_a, eps_b, nu)
 
-# # [(0, 0.4, 0), (1, 0, 0), (0.1, 0.2, 0.3), (0.25, 0.5, 0.15), (1, 1), (1, 1)] T1
-# # 0.6893923902985384
-# # [0.09267196 0.32484929 0.0        ] 0.05287641168561329 [0.76831952 0.18787393 0.0        ] 0.132196737192364
-# ca = np.array([(0, 0.4, 0)])
-# cb = np.array([(1, 0, 0)])
-# ra = np.array([[0.1, 0.2, 0.3]])
-# rb = np.array([[0.25, 0.5, 0.15]])
-# eps_a = np.array([[1.0, 1.0]])
-# eps_b = np.array([[1.0, 1.0]])
-# xa = np.array([[0.09267196, 0.32484929, 0.0        ]])
-# xb = np.array([[0.76831952, 0.18787393,   0.0] ])
-# nu = np.array([0.05287641168561329, 0.132196737192364])
-# kkt_conditions(xa, xb, ca, cb, ra, rb, eps_a, eps_b, nu)
-#
-# # [(0, 0.0, 0), (1, 0, 0), (0.1, 0.2, 0.3), (0.25, 0.5, 0.15), (1, 1), (1, 1)] T2
-# # 0.650000000474273
-# # [0.1 0.  0. ] 0.050000282618963394 [0.75 0.   0.  ] 0.12500096630152147
-# ca = np.array([(0, 0.0, 0)])
-# cb = np.array([(1, 0, 0)])
-# ra = np.array([[0.1, 0.2, 0.3]])
-# rb = np.array([[0.25, 0.5, 0.15]])
-# eps_a = np.array([[1.0, 1.0]])
-# eps_b = np.array([[1.0, 1.0]])
-# xa = np.array([[0.1, 0.0, 0.0        ]])
-# xb = np.array([[0.75, 0.0,   0.0] ])
-# nu = np.array([0.050000282618963394, 0.12500096630152147])
-# kkt_conditions(xa, xb, ca, cb, ra, rb, eps_a, eps_b, nu)
+print("Case 1")
+# case1: inside-outside function (ie constraints) does not seem to work as both points lie inside the green shape
+# (-1.0, -0.9, 0.9) (-1.0, 0.5, -1.7) (1, 1.2, 0.9) (1.25, 1.5, 1.15) (0.1, 1.0) (2.0, 2.0)
+# [-1.34607501 -1.31957271  1.02173112] 1.1334285582155492e-09 [-1.34607501 -1.31957271  1.02173112] 2.4825092101942315e-09
+# 2.5757689740317075e-11
+ca = np.array([(-1.0, -0.9, 0.9)])
+cb = np.array([(-1.0, 0.5, -1.7)])
+ra = np.array([[1, 1.2, 0.9]])
+rb = np.array([[1.25, 1.5, 1.15]])
+eps_a = np.array([[0.1, 1.0]])
+eps_b = np.array([[2.0, 2.0]])
+xa = np.array([[-1.34607501, -1.31957271, 1.02173112]])
+xb = np.array([[-1.34607501, -1.31957271, 1.02173112] ])
+nu = np.array([1.1334285582155492e-09, 2.4825092101942315e-09])
+kkt_conditions(xa, xb, ca, cb, ra, rb, eps_a, eps_b, nu)
 
-# [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (1.0, 1.0), (1.0, 1.0)]  # Encapsulating ellipsoids
-# 0.7859211790061222
-# [-1.         -0.38897059  0.08568892] 0.4689891270280719 [-1.         -0.12736046 -0.65541312] 0.5969177992631899
-# ca = np.array([[-1.0, -0.9, 0.9]])
-# cb = np.array([[-1.0, 0.5, -1.7]])
-# ra = np.array([[1, 1.2, 0.9]])
-# rb = np.array([[1.25, 1.5, 1.15]])
-# eps_a = np.array([[1.0, 1.0]])
-# eps_b = np.array([[1.0, 1.0]])
-# xa = np.array([[-1.0,         -0.38897059,  0.08568892]])
-# xb = np.array([[-1.0,         -0.12736046, -0.65541312]])
-# nu = np.array([0.4689891270280719, 0.5969177992631899])
-# kkt_conditions(xa, xb, ca, cb, ra, rb, eps_a, eps_b, nu)
+print("Case 2")
+# case2: the optimal points do not provide the minimum distance (eg smaller z value for the green shape provides a smaller dist)
+# (-1.0, -0.9, 0.9) (-1.0, 0.5, -1.7) (1, 1.2, 0.9) (1.25, 1.5, 1.15) (0.2, 1.0) (1.9, 1.9)
+# [-0.99999999  0.29999998  0.9       ] 0.016396474407018823 [-1.    0.5  -0.55] 1.0822535994085305
+# 1.463728120329329
+ca = np.array([(-1.0, -0.9, 0.9)])
+cb = np.array([(-1.0, 0.5, -1.7)])
+ra = np.array([[1, 1.2, 0.9]])
+rb = np.array([[1.25, 1.5, 1.15]])
+eps_a = np.array([[0.2, 1.0]])
+eps_b = np.array([[1.9, 1.9]])
+xa = np.array([[-0.99999999,  0.29999998,  0.9]])
+xb = np.array([[-1.0, 0.5,   -0.55] ])
+nu = np.array([0.016396474407018823, 1.0822535994085305])
+kkt_conditions(xa, xb, ca, cb, ra, rb, eps_a, eps_b, nu)
 
-# [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 0.5, 0.9), (1.25, 1.5, 1.15), (0.25, 1.0), (0.1, 0.9)]  # Not works_a2
-# 1.1294792601553083
+print("Case 3")
+# case3: the optimal points do not provide the minimum distance (eg smaller y value for the red shape provides a smaller dist)
+# (-1.0, -0.9, 0.9) (-1.0, 0.5, -1.7) (1, 0.5, 0.9) (1.25, 1.5, 1.15) (0.25, 1.0) (0.1, 0.9)
 # [-0.99997159 -0.44685734  0.06577965] 0.10433540046637144 [-0.99995861  0.5        -0.55      ] 0.03134836696812151
-ca = np.array([[-1.0, -0.9, 0.9]])
-cb = np.array([[-1.0, 0.5, -1.7]])
+# 1.1294792601553083
+ca = np.array([(-1.0, -0.9, 0.9)])
+cb = np.array([(-1.0, 0.5, -1.7)])
 ra = np.array([[1, 0.5, 0.9]])
 rb = np.array([[1.25, 1.5, 1.15]])
 eps_a = np.array([[0.25, 1.0]])
 eps_b = np.array([[0.1, 0.9]])
-xa = np.array([[-0.99993254, -0.44685734,  0.06577965]])
-xb = np.array([[-0.99972466,  0.2,        -0.55000022]])
+xa = np.array([[-0.99997159,  -0.44685734,  0.06577965]])
+xb = np.array([[-0.99995861, 0.2,   -0.55] ])
 nu = np.array([0.10433540046637144, 0.03134836696812151])
 kkt_conditions(xa, xb, ca, cb, ra, rb, eps_a, eps_b, nu)
-
-# [(-1.0, 1.9, 0.9), (-1.0, 0.5, -1.7), (1, 0.5, 0.9), (1.25, 1.5, 1.15), (0.25, 1.0), (0.1, 0.9)]  # Solved?, shape on RHS is fine
-# 0.550611505770308
-# [-9.99769756e-01  1.67415807e+00  1.95056854e-04] 0.1126681292738672 [-0.99976856  1.67035084 -0.55040329] 0.0578830842964965
-# ca = np.array([[-1.0, 1.9, 0.9]])
-# cb = np.array([[-1.0, 0.5, -1.7]])
-# ra = np.array([[1, 0.5, 0.9]])
-# rb = np.array([[1.25, 1.5, 1.15]])
-# eps_a = np.array([[0.25, 1.0]])
-# eps_b = np.array([[0.1, 0.9]])
-# xa = np.array([[-0.99769756, 1.67415807,  1.95056854e-04]])
-# xb = np.array([[-0.99976856,  1.67035084, -0.55040329]])
-# nu = np.array([0.1126681292738672, 0.0578830842964965])
-# kkt_conditions(xa, xb, ca, cb, ra, rb, eps_a, eps_b, nu)
