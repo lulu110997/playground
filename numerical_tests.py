@@ -1,13 +1,28 @@
 """
 Sanity checks
 """
-
 from numpy.ma.testutils import assert_almost_equal
 from superquadric import SuperquadricObject
 from min_dists import MinDist2D, MinDist3D_transl
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.patches import Ellipse
+
+def split_sphere(R = 1, horizontal_split = 8, vertical_split = 8, method="equal_angles"):
+    theta = np.linspace(0,360,horizontal_split+1)
+    if method == "equal_angles":
+        phi = np.linspace(0, 360, vertical_split+1)
+        c = np.cos(phi)
+        s = np.sin(phi)
+    elif method == "equal_area":
+        c = np.linspace(-1, 1, vertical_split+1)
+        s = 1 - c**2
+    else:
+        raise(ValueError('method must be "equal_angles" or "equal_area"'))
+    x = R * np.outer(s, np.cos(theta))
+    y = R * np.outer(s, np.sin(theta))
+    z = R * np.outer(c, np.ones(horizontal_split+1))
+    return x, y, z
 
 ###################################################### 2D tests ########################################################
 
@@ -187,30 +202,30 @@ def gradient_check_2d(plot=False):
 
 ###################################################### 3D tests ########################################################
 
-def ellipse_test_transl(plot=False):
+def ellipse_test_transl_old(plot=False):
     """
     Uses eps=1 and quat=(1,0,0,0). Check distance with only translation
     These tests revealed that we needed to use abs on the numerator of the inside outside function
     """
     params = [
         # ca, cb, ra, rb, eps_a, eps_b
-        [(0, 0.0, 0), (1, 0, 0), (0.1, 0.2, 0.3), (0.25, 0.5, 0.15), (1, 1), (1, 1)], # T1
-        [(0, 0.4, 0), (1, 0, 0), (0.1, 0.2, 0.3), (0.25, 0.5, 0.15), (1, 1), (1, 1)], # T2
-        [(-1.0, -3.8, 0.9), (-1.0, 0.6, -1.7),  (1, 1.2, 0.9), (1.25, 1.5, 1.15), (1, 1), (1, 1)],
-        [(-2, -0.5, -0.4), (-2, -0.4, 0.8), (0.2, 0.1, 0.4), (0.15, 0.5, 0.3), (1, 1), (1, 1)],
-        [(-1, -0.9, 0.9), (1, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (0.5, 1), (1, 1)],
-        [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (0.5, 1.0), (1.8, 2.0)],
+        # [(0, 0.0, 0), (1, 0, 0), (0.1, 0.2, 0.3), (0.25, 0.5, 0.15), (1, 1), (1, 1)], # T1
+        # [(0, 0.4, 0), (1, 0, 0), (0.1, 0.2, 0.3), (0.25, 0.5, 0.15), (1, 1), (1, 1)], # T2
+        # [(-1.0, -3.8, 0.9), (-1.0, 0.6, -1.7),  (1, 1.2, 0.9), (1.25, 1.5, 1.15), (1, 1), (1, 1)],
+        # [(-2, -0.5, -0.4), (-2, -0.4, 0.8), (0.2, 0.1, 0.4), (0.15, 0.5, 0.3), (1, 1), (1, 1)],
+        # [(-1, -0.9, 0.9), (1, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (0.5, 1), (1, 1)],
+        # [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (0.5, 1.0), (1.8, 2.0)],
 
         [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (0.1, 1.0), (2.0, 2.0)],  # Not works_a1
-        [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (1.0, 1.0), (1.0, 1.0)],  # Encapsulating ellipsoids
+        # [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (1.0, 1.0), (1.0, 1.0)],  # Encapsulating ellipsoids
         [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (0.2, 1.0), (1.9, 1.9)],  # eps_b less than two works but 0.2 and 0.1 for eps_a[0] does not work (smth to do with curvature??)
-        [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (0.1, 1.0), (1.9, 1.9)],   # 0.1
-        [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (0.25, 1.0), (1.9, 1.9)],  # i think works?
+        # [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (0.1, 1.0), (1.9, 1.9)],   # 0.1
+        # [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (0.25, 1.0), (1.9, 1.9)],  # i think works?
 
         [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 0.5, 0.9), (1.25, 1.5, 1.15), (0.25, 1.0), (0.1, 0.9)],  # Not works_a2
-        [(-1.0, -0.9, 0.9), (-1.0, -0.5, -1.7), (1, 0.5, 0.9), (1.25, 1.5, 1.15), (0.25, 1.0), (0.1, 0.9)],  # Not works_a3
-        [(-1.0, 1.9, 0.9), (-1.0, 0.5, -1.7), (1, 0.5, 0.9), (1.25, 1.5, 1.15), (0.25, 1.0), (0.1, 0.9)],  # Shape on RHS is fine
-        [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (1.0, 1.0), (0.9, 0.9)]  # Not works_a4
+        # [(-1.0, -0.9, 0.9), (-1.0, -0.5, -1.7), (1, 0.5, 0.9), (1.25, 1.5, 1.15), (0.25, 1.0), (0.1, 0.9)],  # Not works_a3
+        # [(-1.0, 1.9, 0.9), (-1.0, 0.5, -1.7), (1, 0.5, 0.9), (1.25, 1.5, 1.15), (0.25, 1.0), (0.1, 0.9)],  # Shape on RHS is fine
+        # [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (1.0, 1.0), (0.9, 0.9)]  # Not works_a4
     ]
 
     for ca, cb, ra, rb, eps_a, eps_b in params:
@@ -231,6 +246,87 @@ def ellipse_test_transl(plot=False):
             plt.xlabel('x-axis')
             ax.axis('scaled')
             plt.show(block=True)
+
+def ellipse_test_transl(plot=False):
+    """
+    Test with different eps values and move each shapes in different quadrants
+    """
+    plt.ion()
+    # ca, cb, ra, rb, eps_a, eps_b
+    params = [
+        # Ellipses (1.0, 1.0)
+        [(0.0, 0.0, 0.0), (0.5, 0.15, 0.15), (0.1, 0.2, 0.3), (0.25, 0.5, 0.15), (1.0, 1.0), (1.0, 1.0)],
+
+        # Ellipse (1, 1) and cuboid (0.1, 2.0)
+        [(-0.0, -0.0, 0.0), (-1.0, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (0.5, 1.0), (1.8, 2.0)],
+
+        # Cuboids (0.1, 2.0)
+        [(0.0, 0.0, 0.0), (0.5, 0.15, 0.15), (0.1, 0.2, 0.3), (0.25, 0.5, 0.15), (0.1, 2.0), (0.1, 2.0)],
+
+        # Ellipse (1.0, 1.0) and cylinder (0.1, 1.0)
+        [(0.0, 0.0, 0.0), (0.5, 0.15, 0.15), (0.1, 0.2, 0.3), (0.25, 0.5, 0.15), (1.0, 1.0), (0.1, 0.1)],
+
+        # Cylinders (0.1, 1.0)
+        [(0.0, 0.0, 0.0), (0.5, 0.15, 0.15), (0.1, 0.2, 0.3), (0.25, 0.5, 0.15), (0.1, 1.0), (0.1, 1.0)],
+
+        # Cuboid (0.1, 2.0) and cylinder (0.1, 1.0)
+        [(0.0, 0.0, 0.0), (0.5, 0.15, 0.15), (0.1, 0.2, 0.3), (0.25, 0.5, 0.15), (0.1, 2.0), (0.1, 1.0)],
+
+        # Randoms (eg swapping value of index for cuboid and cylinder)
+        [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (0.1, 1.0), (2.0, 2.0)],
+        [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (0.2, 1.0), (1.9, 1.9)],
+        [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (0.1, 1.0), (1.9, 1.9)],
+        [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (0.25, 1.0), (1.9, 1.9)],
+        [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 0.5, 0.9), (1.25, 1.5, 1.15), (0.25, 1.0), (0.1, 0.9)],  # Not works_a2
+        [(-1.0, -0.9, 0.9), (-1.0, -0.5, -1.7), (1, 0.5, 0.9), (1.25, 1.5, 1.15), (0.25, 1.0), (0.1, 0.9)],  # Not works_a3
+        [(-1.0, 1.9, 0.9), (-1.0, 0.5, -1.7), (1, 0.5, 0.9), (1.25, 1.5, 1.15), (0.25, 1.0), (0.1, 0.9)],  # Shape on RHS is fine
+        [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (1.0, 1.0), (0.9, 0.9)]  # Not works_a4
+    ]
+    X, Y, Z = split_sphere()
+    X = X.flatten()
+    Y = Y.flatten()
+    Z = Z.flatten()
+    data = np.stack((X,Y,Z), axis=1)
+    new_array = [tuple(row) for row in data]
+    c_offset = np.unique(data, axis=0)
+    ca = [0, 0, 0]
+    for ca_org, cb_org, ra, rb, eps_a, eps_b in params:
+        for cnt in range(2):
+            for c in c_offset:
+                ca[0] = cb_org[0] + c[0] + ca[0]
+                ca[1] = cb_org[1] + c[1] + ca[1]
+                ca[2] = cb_org[2] + c[2] + ca[2]
+                ca_org = ca
+                if cnt == 1:
+                    ca = list(ca_org)
+                    cb = list(cb_org)
+                else:
+                    ca = list(cb_org)
+                    cb = list(ca_org)
+
+                # Create sq object
+                s1 = SuperquadricObject(*ra, *eps_a, pos=ca, quat=(1, 0, 0, 0))
+                s2 = SuperquadricObject(*rb, *eps_b, pos=cb, quat=(1, 0, 0, 0))
+
+                # Create optimisation problem
+                optimiser = MinDist3D_transl(ca, cb, ra, rb, eps_a, eps_b, objective="NORM")
+
+                xa, lagr_a, xb, lagr_b = optimiser.get_primal_dual_solutions()
+
+                if plot:
+                    ax = plt.subplot(111, projection='3d')
+                    s1_handle = s1.plot_sq(ax, 'green')
+                    s2_handle = s2.plot_sq(ax, 'red')
+                    line_handle = ax.plot((xa[0], xb[0]), (xa[1], xb[1]), (xa[2], xb[2]), 'ro-')
+                    plt.xlabel('x-axis')
+                    ax.axis('scaled')
+                    plt.show()
+                    while not plt.waitforbuttonpress():
+                        plt.pause(0.001)
+                    print(c)
+                    s1_handle.remove()
+                    s2_handle.remove()
+                    line_handle[0].remove()
 
 def ellipse_test_rot(plot=False):
     """
@@ -264,4 +360,7 @@ def ellipse_test_rot(plot=False):
             print(lagr_a, lagr_b)
             plt.show()
 
-ellipse_test_transl(1)
+
+
+ellipse_test_transl_old(1)
+# ellipse_test_transl(1)

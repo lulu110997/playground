@@ -285,12 +285,12 @@ class MinDist3D_transl:
             raise "Type of objective is invalid. Choose 'SOS' or 'NORM'"
 
         # Constraints, variables must lie on the surface of the sq
-        xa_w = (cp.abs(self.xa[0] - self.ca[0]) / self.ra[0])**(2.0/self.eps_a[1])
-        ya_w = (cp.abs(self.xa[1] - self.ca[1]) / self.ra[1])**(2.0/self.eps_a[1])
-        za_w = (cp.abs(self.xa[2] - self.ca[2]) / self.ra[2])**(2.0/self.eps_a[0])
-        xb_w = (cp.abs(self.xb[0] - self.cb[0]) / self.rb[0])**(2.0/self.eps_b[1])
-        yb_w = (cp.abs(self.xb[1] - self.cb[1]) / self.rb[1])**(2.0/self.eps_b[1])
-        zb_w = (cp.abs(self.xb[2] - self.cb[2]) / self.rb[2])**(2.0/self.eps_b[0])
+        xa_w = ((self.xa[0] - self.ca[0]) / self.ra[0])**(2.0/self.eps_a[1])
+        ya_w = ((self.xa[1] - self.ca[1]) / self.ra[1])**(2.0/self.eps_a[1])
+        za_w = ((self.xa[2] - self.ca[2]) / self.ra[2])**(2.0/self.eps_a[0])
+        xb_w = ((self.xb[0] - self.cb[0]) / self.rb[0])**(2.0/self.eps_b[1])
+        yb_w = ((self.xb[1] - self.cb[1]) / self.rb[1])**(2.0/self.eps_b[1])
+        zb_w = ((self.xb[2] - self.cb[2]) / self.rb[2])**(2.0/self.eps_b[0])
         self.constraints = [
             ((xa_w + ya_w)**(self.eps_a[1]/self.eps_a[0])) + za_w - 1.0 <= 0,
             ((xb_w + yb_w)**(self.eps_b[1]/self.eps_b[0])) + zb_w - 1.0 <= 0
@@ -308,11 +308,10 @@ class MinDist3D_transl:
         """
         # self.prob.solve(solver='SCS', requires_grad=True)
         # ['CLARABEL', 'CVXOPT', 'DAQP', 'DIFFCP', 'ECOS', 'ECOS_BB', 'GLPK', 'GLPK_MI', 'OSQP', 'PIQP', 'PROXQP', 'SCIPY', 'SCS']
-        ret_val = self.prob.solve(solver='CLARABEL', verbose=True, tol_feas=1e-11, max_iter=10000, max_step_fraction=0.1)
+        ret_val = self.prob.solve(solver='CLARABEL', verbose=False)
         if not isinstance(ret_val, float):
             print(ret_val)
             raise "problem cannot be solved"
-        print(ret_val)
         return self.xa.value.squeeze(), self.constraints[0].dual_value, self.xb.value.squeeze(), self.constraints[1].dual_value
 
     def get_optimal_value(self):
