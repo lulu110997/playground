@@ -1,7 +1,6 @@
 import numpy as np
-from sympy.matrices import Matrix, eye, zeros, ones, diag, MatrixSymbol
+from sympy.matrices import Matrix, zeros, diag, MatrixSymbol
 from sympy import symbols, diff, sqrt
-from sympy.geometry import Ellipse
 
 
 def attempt1():
@@ -181,65 +180,3 @@ def kkt_conditions(xa_sol, xb_sol, ca_sol, cb_sol, ra_sol, rb_sol, eps_a_sol, ep
 
     print()
 
-print("Baseline")
-# (0, 0.4, -0.2) (1, 0, 0) (0.1, 0.2, 0.3) (0.25, 0.5, 0.15) (1, 1) (1, 1)
-# [ 0.08711657  0.32866006 -0.09878141] 0.05578323714091425 [ 0.76923862  0.18899438 -0.01072417] 0.13162102312957683
-# 0.701819824489615
-ca = np.array([(0, 0.4, -0.2)])
-cb = np.array([(1, 0, 0)])
-ra = np.array([[0.1, 0.2, 0.3]])
-rb = np.array([[0.25, 0.5, 0.15]])
-eps_a = np.array([[1.0, 1.0]])
-eps_b = np.array([[1.0, 1.0]])
-xa = np.array([[0.08711657, 0.32866006, -0.09878141]])
-xb = np.array([[0.76923862, 0.18899438,   -0.01072417] ])
-nu = np.array([0.05578323714091425, 0.13162102312957683])
-kkt_conditions(xa, xb, ca, cb, ra, rb, eps_a, eps_b, nu)
-
-print("Case 1")
-# case1: inside-outside function (ie constraints) does not seem to work as both points lie inside the green shape
-# (-1.0, -0.9, 0.9) (-1.0, 0.5, -1.7) (1, 1.2, 0.9) (1.25, 1.5, 1.15) (0.1, 1.0) (2.0, 2.0)
-# [-1.34607501 -1.31957271  1.02173112] 1.1334285582155492e-09 [-1.34607501 -1.31957271  1.02173112] 2.4825092101942315e-09
-# 2.5757689740317075e-11
-ca = np.array([(-1.0, -0.9, 0.9)])
-cb = np.array([(-1.0, 0.5, -1.7)])
-ra = np.array([[1, 1.2, 0.9]])
-rb = np.array([[1.25, 1.5, 1.15]])
-eps_a = np.array([[0.1, 1.0]])
-eps_b = np.array([[2.0, 2.0]])
-xa = np.array([[-1.34607501, -1.31957271, 1.02173112]])
-xb = np.array([[-1.34607501, -1.31957271, 1.02173112] ])
-nu = np.array([1.1334285582155492e-09, 2.4825092101942315e-09])
-kkt_conditions(xa, xb, ca, cb, ra, rb, eps_a, eps_b, nu)
-
-print("Case 2")
-# case2: the optimal points do not provide the minimum distance (eg smaller z value for the green shape provides a smaller dist)
-# (-1.0, -0.9, 0.9) (-1.0, 0.5, -1.7) (1, 1.2, 0.9) (1.25, 1.5, 1.15) (0.2, 1.0) (1.9, 1.9)
-# [-0.99999999  0.29999998  0.9       ] 0.016396474407018823 [-1.    0.5  -0.55] 1.0822535994085305
-# 1.463728120329329
-ca = np.array([(-1.0, -0.9, 0.9)])
-cb = np.array([(-1.0, 0.5, -1.7)])
-ra = np.array([[1, 1.2, 0.9]])
-rb = np.array([[1.25, 1.5, 1.15]])
-eps_a = np.array([[0.2, 1.0]])
-eps_b = np.array([[1.9, 1.9]])
-xa = np.array([[-0.99999999,  0.29999998,  0.9]])
-xb = np.array([[-1.0, 0.5,   -0.55] ])
-nu = np.array([0.016396474407018823, 1.0822535994085305])
-kkt_conditions(xa, xb, ca, cb, ra, rb, eps_a, eps_b, nu)
-
-print("Case 3")
-# case3: the optimal points do not provide the minimum distance (eg smaller y value for the red shape provides a smaller dist)
-# (-1.0, -0.9, 0.9) (-1.0, 0.5, -1.7) (1, 0.5, 0.9) (1.25, 1.5, 1.15) (0.25, 1.0) (0.1, 0.9)
-# [-0.99997159 -0.44685734  0.06577965] 0.10433540046637144 [-0.99995861  0.5        -0.55      ] 0.03134836696812151
-# 1.1294792601553083
-ca = np.array([(-1.0, -0.9, 0.9)])
-cb = np.array([(-1.0, 0.5, -1.7)])
-ra = np.array([[1, 0.5, 0.9]])
-rb = np.array([[1.25, 1.5, 1.15]])
-eps_a = np.array([[0.25, 1.0]])
-eps_b = np.array([[0.1, 0.9]])
-xa = np.array([[-0.99997159,  -0.44685734,  0.06577965]])
-xb = np.array([[-0.99995861, 0.2,   -0.55] ])
-nu = np.array([0.10433540046637144, 0.03134836696812151])
-kkt_conditions(xa, xb, ca, cb, ra, rb, eps_a, eps_b, nu)
