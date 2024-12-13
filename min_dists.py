@@ -296,45 +296,27 @@ class MinDist3DTransl(MinDist):
         Return the gradient of Lagrangian wrt problem parameters
         Returns: list(float..)  | [nabla_cxa_L, nabla_cya_L, nabla_cya_L, nabla_cyb_L]
         """
-        return [-2*self.constraints[0].dual_value*((self.xa.value[0, 0] - self.cxa.value[0, 0]) / self.aa**2),
-                -2*self.constraints[0].dual_value*((self.xa.value[1, 0] - self.cxa.value[1, 0]) / self.ba**2),
-                -2*self.constraints[1].dual_value*((self.xb.value[0, 0] - self.cxb.value[0, 0]) / self.ab**2),
-                -2*self.constraints[1].dual_value*((self.xb.value[1, 0] - self.cxb.value[1, 0]) / self.bb**2)]
+        xd = math.copysign((2.0 * (cp.abs(self.ca[0] - self.xa[0]) / self.ra[0]) ** (2.0 / self.eps_a[1]) * (
+                (cp.abs(self.ca[0] - self.xa[0]) / self.ra[0]) ** (2.0 / self.eps_a[1]) + (cp.abs(self.ca[1] - self.xa[1]) / self.ra[1]) ** (2.0 / self.eps_a[1])) ** (
+                self.eps_a[1] / self.eps_a[0])).value, (self.ca[0] - self.xa[0]).value) / (
+                self.eps_a[0] * ((cp.abs(self.ca[0] - self.xa[0]) / self.ra[0]) ** (2.0 / self.eps_a[1]) + (cp.abs(self.ca[1] - self.xa[1]) / self.ra[1]) ** (2.0 / self.eps_a[1])) * cp.abs(self.ca[0] - self.xa[0]))
+        yd = math.copysign((2.0 * (cp.abs(self.ca[1] - self.xa[1]) / self.ra[1]) ** (2.0 / self.eps_a[1]) * (
+                (cp.abs(self.ca[0] - self.xa[0]) / self.ra[0]) ** (2.0 / self.eps_a[1]) + (cp.abs(self.ca[1] - self.xa[1]) / self.ra[1]) ** (2.0 / self.eps_a[1])) ** (
+                self.eps_a[1] / self.eps_a[0])).value, (self.ca[1] - self.xa[1]).value) / (
+                self.eps_a[0] * ((cp.abs(self.ca[0] - self.xa[0]) / self.ra[0]) ** (2.0 / self.eps_a[1]) + (cp.abs(self.ca[1] - self.xa[1]) / self.ra[1]) ** (2.0 / self.eps_a[1])) * cp.abs(
+            self.ca[1] - self.xa[1]))
+        zd = math.copysign((2.0 * (cp.abs(self.ca[2] - self.xa[2]) / self.ra[2]) ** (2.0 / self.eps_a[0])).value, (self.ca[2] - self.xa[2]).value) / (self.eps_a[0] * cp.abs(self.ca[2] - self.xa[2]))
+        return self.constraints[0].dual_value*xd.value, self.constraints[0].dual_value*yd.value, self.constraints[0].dual_value*zd.value
 
-    def sensitivity_cvxpy(self):
+class MinDistMink2D(MinDist):
+    def __init__(self, ca, cb, ra, rb, eps_a=2.0, eps_b=2.0, objective="SOS"):
         """
-        TODO: change for 3D
-        Sensitivity analysis through cvxpy
-        Returns: tuple(np.array, np.array) | [arr(nabla_cxa_L, nabla_cya_L), arr(nabla_cya_L, nabla_cyb_L)]
-
-        More generally, the backward method can be used to compute the gradient of a scalar-valued function f of the
-        optimal variables, with respect to the parameters. If x(p) denotes the optimal value of the variable
-        (which might be a vector or a matrix) for a particular value of the parameter p and f(x(p)) is a scalar, then
-        backward can be used to compute the gradient of f with respect to p. Let x* = x(p), and say the derivative of f
-        with respect to x* is dx. To compute the derivative of f with respect to p, before calling problem.backward(),
-        just set x.gradient = dx.
-
-        The backward method can be powerful when combined with software for automatic differentiation. We recommend the
-        software package CVXPY Layers, which provides differentiable PyTorch and TensorFlow wrappers for CVXPY problems.
+        Parent class for the other classes to calculate minimum distance between two superquadrics
+        Args:
+            ca, cb: Tuple[float] | Represents the centre position of each superquadric in the world frame
+            ra, rb: Tuple[float] | Represents the radii of each superquadric
+            eps_a, eps_b: Tuple[float] | Represents the roundness parameter (eps1, eps2) of each superquadric
+            objective: String | The objective function for the minimisation problem. Defaults to sum of squares (SOS)
         """
-        delta_x = 2*(self.xa - self.xb)  # Gradient of objective function wrt decision variables
-        self.xa.gradient = delta_x.value
-        self.xb.gradient = -delta_x.value
-        self.prob.backward()
-        return self.cxa.gradient.squeeze(), self.cxb.gradient.squeeze()
-
-# if __name__ == "__main__":
-#     ca = (-1, 0, 0)
-#     cb = (-2, 0, 0)
-#     ra = (0.1, 0.2, 0.1)
-#     rb = (0.1, 0.1, 0.2)
-#     eps_a = (1, 1)
-#     eps_b = (1, 1)
-#     qa = (1, 0, 0, 0)
-#     qb = (1, 0, 0, 0)
-#     obj = MinDist3D(ca, cb, ra, rb, eps_a, eps_b, qa, qb, objective="NORM")
-#     print(obj.get_primal_dual_solutions())
-#     cb = (2, 0, 0)
-#     qa = (0.9512512, -0.0449435, -0.254887, 0.1677313)
-#     obj.set_params(ca, cb, qa, qb)
-#     print(obj.get_primal_dual_solutions())
+        super().__init__(ca, cb, ra, rb, eps_a, eps_b, objective)
+        self._set_problem()

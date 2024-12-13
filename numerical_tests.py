@@ -141,7 +141,36 @@ def ellipse_2d_numerical_diff():
     print("cvxpy predicted: ", cvxpy_pred)
     print(f"numerical diff:   [{nabla_cxa}, {nabla_cya}, {nabla_cxb}, {nabla_cyb}]")
 
+    # f(x+2h)
+    cxa_perturb = cxa[:]
+    cxa_perturb[0] = cxa_perturb[0] + 2*PERTURBATION
+    obj.set_params(cxa_perturb, cxb)
+    xa, lambda_a ,xb, lambda_b = obj.get_primal_dual_solutions(requires_grad=True)
+    dist_2plus = (xa[0] - xb[0])**2 + (xa[1] - xb[1])**2
 
+    # f(x-2h)
+    cxa_perturb = cxa[:]
+    cxa_perturb[0] = cxa_perturb[0] - 2*PERTURBATION
+    obj = MinDist2D(cxa_perturb, cxb, ra, rb)
+    xa, __ ,xb, __ = obj.get_primal_dual_solutions(requires_grad=True)
+    dist_2minus = (xa[0] - xb[0])**2 + (xa[1] - xb[1])**2
+
+    # f(x+h)
+    cxa_perturb = cxa[:]
+    cxa_perturb[0] = cxa_perturb[0] + PERTURBATION
+    obj.set_params(cxa_perturb, cxb)
+    xa, lambda_a ,xb, lambda_b = obj.get_primal_dual_solutions(requires_grad=True)
+    dist_plus = (xa[0] - xb[0])**2 + (xa[1] - xb[1])**2
+
+    # f(x-h)
+    cxa_perturb = cxa[:]
+    cxa_perturb[0] = cxa_perturb[0] - PERTURBATION
+    obj = MinDist2D(cxa_perturb, cxb, ra, rb)
+    xa, __ ,xb, __ = obj.get_primal_dual_solutions(requires_grad=True)
+    dist_minus = (xa[0] - xb[0])**2 + (xa[1] - xb[1])**2
+
+    nabla_cxa = (- dist_2minus + 8*dist_plus - 8*dist_minus + dist_2plus)/(12*PERTURBATION)
+    print(nabla_cxa)
 
 def gradient_check_2d(plot=False):
     """
@@ -161,9 +190,9 @@ def gradient_check_2d(plot=False):
     # Define centres and radii of SQ
     params = [
         # cxa, cya, cxb, cyb, aa, ba, ab, bb
-        [(1.0, 1.0), (-1.0, -1.0), (1.1, 1.1), (1.2, 1.2)],  # Big circle
-        [(1.0, 1.0), (-1.0, -1.0), (1.1, 1.1), (0.8, 0.8)],  # Smaller circle
-        [(1.0, 1.0), (-1.0, -1.0), (1.1, 1.1), (0.2, 0.2)],  # Even smaller circle
+        # [(1.0, 1.0), (-1.0, -1.0), (1.1, 1.1), (1.2, 1.2)],  # Big circle
+        # [(1.0, 1.0), (-1.0, -1.0), (1.1, 1.1), (0.8, 0.8)],  # Smaller circle
+        # [(1.0, 1.0), (-1.0, -1.0), (1.1, 1.1), (0.2, 0.2)],  # Even smaller circle
         [(0.2, 0.2), (-1.0, -1.0), (1.1, 1.1), (0.3, 0.3)],  # Circles close to each other
         [(1.0, 1.0), (0.2, 0.15), (0.3, 0.3), (0.8, 0.8)],   # Circles close
         [(1.0, -1.0), (-2.5, 0.15), (1.3, 0.4), (0.75, 0.2)], # Ellipse
@@ -177,6 +206,7 @@ def gradient_check_2d(plot=False):
 
         # Obtain solution and gradients
         xa, lambda_a, xb, lambda_b = obj.get_primal_dual_solutions(requires_grad=True)
+        print(xa, lambda_a, xb, lambda_b)
         analytic_tmp =  obj.sensitivity_analysis()
         tmp = obj.sensitivity_cvxpy()
 
@@ -198,10 +228,9 @@ def gradient_check_2d(plot=False):
             plt.axis('scaled')
             plt.show()
 
-ellipse_2d_handwritten_check(True)
-ellipse_2d_numerical_diff()
-gradient_check_2d(True)
-
+# ellipse_2d_handwritten_check(True)
+# ellipse_2d_numerical_diff()
+# gradient_check_2d(True)
 ###################################################### 3D tests ########################################################
 
 def ellipse_test_transl(plot=False):
@@ -239,6 +268,8 @@ def ellipse_test_transl(plot=False):
         # Create optimisation problem
         optimiser = MinDist3DTransl(ca, cb, ra, rb, eps_a, eps_b, objective="NORM")
         xa, _, xb, _ = optimiser.get_primal_dual_solutions(requires_grad=False)
+        xd, yd, zd = optimiser.sensitivity_analysis()
+        print(xd, yd, zd)
 
         if plot:
             ax = plt.subplot(111, projection='3d')
@@ -281,5 +312,45 @@ def ellipse_test_rot(plot=False):
             plt.ylabel('y-axis')
             plt.show()
 
-ellipse_test_transl(1)
-ellipse_test_rot(1)
+def ellipse_test_transl_grad(plot=False):
+    """
+    Uses eps=1 and quat=(1,0,0,0). Check distance with only translation
+    These tests revealed that we needed to use abs on the numerator of the inside outside function
+    """
+    params = [
+        # ca, cb, ra, rb, eps_a, eps_b
+        [(0.2, 0.2, 0.001), (-1.0, -1.0, -0.001), (1.1, 1.1, 0.001), (0.3, 0.3, 0.001), (1.0, 1.0), (1.0, 1.0)],  # Circles close to each other
+        [(1.1, -0.8, 0.01), (-1.0, 1.15, -0.01), (0.27, 1.4, 0.1), (0.75, 0.2, 0.1), (1.0, 1.0), (1.0, 1.0)], # Ellipse
+
+        [(0, 0.4, -0.2), (1, 0, 0), (0.1, 0.2, 0.3), (0.25, 0.5, 0.15), (1, 1), (1, 1)], # T3
+        [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (0.1, 1.0), (2.0, 2.0)],  # case1, Not works_a1
+        [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 1.2, 0.9), (1.25, 1.5, 1.15), (0.2, 1.0), (1.9, 1.9)],  # case2, eps_b less than two works but 0.2 and 0.1 for eps_a[0] does not work (smth to do with curvature??)
+        [(-1.0, -0.9, 0.9), (-1.0, 0.5, -1.7), (1, 0.5, 0.9), (1.25, 1.5, 1.15), (0.25, 1.0), (0.1, 0.9)],  # case3, Not works_a2
+        [(-1.5, -0.1, 0.9), (-1.0, 0.5, -1.7), (1, 0.5, 0.9), (1.25, 1.5, 1.15), (0.25, 1.0), (0.1, 0.9)]
+    ]
+
+    for ca, cb, ra, rb, eps_a, eps_b in params:
+        # Create sq object
+        s1 = SuperquadricObject(*ra, *eps_a, pos=ca, quat=(1, 0, 0, 0))
+        s2 = SuperquadricObject(*rb, *eps_b, pos=cb, quat=(1, 0, 0, 0))
+
+        # Create optimisation problem
+        optimiser = MinDist3DTransl(ca, cb, ra, rb, eps_a, eps_b, objective="NORM")
+        xa, lambda_a, xb, lambda_b = optimiser.get_primal_dual_solutions(requires_grad=False)
+        xd, yd, zd = optimiser.sensitivity_analysis()
+
+        if plot:
+            ax = plt.subplot(111, projection='3d')
+            s1.plot_sq(ax, 'green')
+            s2.plot_sq(ax, 'red')
+            ax.plot((xa[0], xb[0]), (xa[1], xb[1]), (xa[2], xb[2]), 'ro-')
+            plt.xlabel('x-axis')
+            plt.ylabel('y-axis')
+            ax.text2D(0.05, 0.95, f"{round(xd, 3)}, {round(yd, 3)}, {round(zd, 3)}", transform=ax.transAxes)
+            ax.axis('scaled')
+            plt.show()
+
+
+# ellipse_test_transl(1)
+# ellipse_test_rot(1)
+ellipse_test_transl_grad(0)
