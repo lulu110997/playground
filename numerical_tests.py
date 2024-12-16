@@ -353,4 +353,49 @@ def ellipse_test_transl_grad(plot=False):
 
 # ellipse_test_transl(1)
 # ellipse_test_rot(1)
-ellipse_test_transl_grad(0)
+# ellipse_test_transl_grad(0)
+
+###################################################### Sim tests ########################################################
+
+def sim_tester(plot=False):
+    """
+    Uses eps=1 and quat=(1,0,0,0). Check distance with only translation
+    These tests revealed that we needed to use abs on the numerator of the inside outside function
+    """
+    Ra = (0.6, 0.2, 0.1)  # Circle radius
+    Rb = (0.3, 0.6, 0.1)  # Radius around the EE
+    eps_a = (0.1, 1)
+    eps_b = (1, 1)
+
+    # Initial and target shape positions
+    xa_init = (4.0, -0.0, 0.1)  # Obstacle position
+    xb_init = (-1.0, 0.6, -0.01)  # Obstacle position
+    xa_tgt = (-4.0, 0, 0.1)  # Final position
+
+    params = [
+        # ca, cb, ra, rb, eps_a, eps_b
+        [xa_tgt, xb_init, Ra, Rb, eps_a, eps_b]
+    ]
+
+    for ca, cb, ra, rb, eps_a, eps_b in params:
+        # Create sq object
+        s1 = SuperquadricObject(*ra, *eps_a, pos=ca, quat=(1, 0, 0, 0))
+        s2 = SuperquadricObject(*rb, *eps_b, pos=cb, quat=(1, 0, 0, 0))
+
+        # Create optimisation problem
+        optimiser = MinDist3DTransl(ca, cb, ra, rb, eps_a, eps_b, objective="NORM")
+        xa, lambda_a, xb, lambda_b = optimiser.get_primal_dual_solutions(requires_grad=False)
+        xd, yd, zd = optimiser.sensitivity_analysis()
+
+        if plot:
+            ax = plt.subplot(111, projection='3d')
+            s1.plot_sq(ax, 'green')
+            s2.plot_sq(ax, 'red')
+            ax.plot((xa[0], xb[0]), (xa[1], xb[1]), (xa[2], xb[2]), 'ro-')
+            plt.xlabel('x-axis')
+            plt.ylabel('y-axis')
+            ax.text2D(0.05, 0.95, f"{round(xd, 3)}, {round(yd, 3)}, {round(zd, 3)}", transform=ax.transAxes)
+            ax.axis('scaled')
+            plt.show()
+
+sim_tester(1)

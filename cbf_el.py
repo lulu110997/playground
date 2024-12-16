@@ -2,32 +2,40 @@ from matplotlib.patches import Ellipse
 import matplotlib.pyplot as plt
 import numpy as np
 from roboticstoolbox.tools import trajectory
-from spatialmath import SE2
+from spatialmath import SE3
 import sympy as sym
 from qpsolvers import solve_ls
-from min_dists import MinDist2D
+from min_dists import MinDist2D, MinDist3DTransl
+from superquadric import SuperquadricObject
+
+REPLAY = True
+SAVE = False
+
+ndim = 3  # 2 for 2D, 3 for 3D transl, 6 for 3D transl and rotation
 
 # CBF param
-GAMMA = 1.0  # Used in CBF calculation
+GAMMA = 0.5  # Used in CBF calculation
 
 # P gain
 K = 1.0  # P gain for position controller
 
 # Shape param
-Ra = (0.6, 0.2)  # Circle radius
-Rb = (0.2, 0.7)  # Radius around the EE
+Ra = (0.1, 0.2, 0.13)  # Circle radius
+Rb = (0.11, 0.0375, 0.11)
+eps_a = (1.0, 1.0)
+eps_b = (0.1, 0.5)
 
 # Initial and target shape positions
-xa_init = (-10.0, -0.0)  # Obstacle position
-xb_init = (-0.1, 0.4)  # Obstacle position
-xa_tgt = (1.0, 0)  # Final position
+xa_init = (-0.454, 0.578, 0.29)  # Obstacle position
+xb_init = (-0.545, -0.080, 0.15)  # Obstacle position
+xa_tgt = (-0.454, -0.542, 0.29)  # Final position
 
 # Velocity limits
-UB = np.array([10.0, 10.0])  # Upper bound
-LB = np.array([-10.0, -10.0])  # Lower bound
+UB = np.array([5.0]*ndim)  # Upper bound
+LB = np.array([-5.0]*ndim)  # Lower bound
 
 FREQ = 500.0
-TIME = 1.0
+TIME = 10.0
 DT = 1.0/FREQ
 STEPS = int(TIME/DT)
 
@@ -54,20 +62,26 @@ def obtain_cbf():
 
 ########################################################################################################################
 # Create a trajectory
-initial_pose = SE2(xa_init)
-final_pose =SE2(xa_tgt)
+initial_pose = SE3(xa_init)
+final_pose =SE3(xa_tgt)
 x_traj = trajectory.ctraj(initial_pose, final_pose, STEPS).t
 
 # Histories
-x_an_history = np.zeros((STEPS, 2))
-x_opt_history = np.zeros((STEPS, 2))
-xd_an_history = np.zeros((STEPS, 2))
-xd_opt_history = np.zeros((STEPS, 2))
+x_an_history = np.zeros((STEPS, ndim))
+x_opt_history = np.zeros((STEPS, ndim))
+xd_an_history = np.zeros((STEPS, ndim))
+xd_opt_history = np.zeros((STEPS, ndim))
 lagrange_history = np.zeros((STEPS, 2))
+sqa_closest_history = np.zeros((STEPS, ndim))
+sqb_closest_history = np.zeros((STEPS, ndim))
 optimisation_h_history = np.zeros((STEPS, 1))
-optimisation_hd_history = np.zeros((STEPS, 2))
+optimisation_hd_history = np.zeros((STEPS, ndim))
 
-hx, hx_dot = obtain_cbf()
+if ndim == 2:
+    hx, hx_dot = obtain_cbf()
+else:
+    hx = None
+    hx_dot = None
 
 x_an_curr = np.array(xa_init)
 x_opt_curr = np.array(xa_init)
@@ -75,52 +89,73 @@ x_opt_curr = np.array(xa_init)
 x_an_history[0, :] = xa_init
 x_opt_history[0, :] = xa_init
 
-# Create optimiser
-obj = MinDist2D(cxa=xa_init[0], cya=xa_init[1], cxb=xb_init[0], cyb=xb_init[1],
-                aa=Ra[0], ba=Ra[1], ab=Rb[0], bb=Rb[1])
+if REPLAY:
+    x_opt_history = np.load('x_opt_history.npy')  # load
+    sqa_closest_history = np.load('sqa_closest_history.npy')
+    sqb_closest_history = np.load('sqb_closest_history.npy')
+else:
+    # Create optimiser
+    obj = MinDist3DTransl(ca=xa_init, cb=xb_init, ra=Ra, rb=Rb, eps_a=eps_a, eps_b=eps_b, objective="NORM")
 
-# Control loop
-for idx in range(1, STEPS):
-    # Change sq parameters in optimiser
-    obj.set_params(cxa=x_opt_curr[0], cya=x_opt_curr[1], cxb=xb_init[0], cyb=xb_init[1])
-    xa_star, lambda_a, xb_star, lambda_b = obj.get_primal_dual_solutions()
+    # Control loop
+    for idx in range(1, STEPS):
+        # Change sq parameters in optimiser
+        obj.set_params(ca=x_opt_curr, cb=xb_init)
+        xa_star, lambda_a, xb_star, lambda_b = obj.get_primal_dual_solutions(False)
 
-    # Optimisation approach
-    u = (K/DT)*(x_traj[idx] - x_opt_curr)
-    G_opt = -np.array(obj.sensitivity_analysis()[:2])  # CBF derivative
-    h_opt = GAMMA * obj.get_optimal_value()  # CBF exponential gamma*hx
-    xd_opt_des = solve_ls(np.eye(2), u, G_opt, np.array([h_opt]), lb=LB, ub=UB, solver="scs")  # clarabel or proxqp
-    next_x_opt = x_opt_curr + xd_opt_des*DT
+        # Optimisation approach
+        u = (K/DT)*(x_traj[idx] - x_opt_curr)
+        G_opt = -np.array(obj.sensitivity_analysis())  # CBF derivative
+        h_opt = GAMMA * obj.get_optimal_value()  # CBF exponential gamma*hx
+        xd_opt_des = solve_ls(np.eye(3), u, G_opt, np.array([h_opt]), lb=LB, ub=UB, solver="clarabel")  # clarabel or proxqp
+        next_x_opt = x_opt_curr + xd_opt_des*DT
 
-    # Save states
-    x_opt_history[idx, :] = x_opt_curr
-    xd_opt_history[idx, :] = xd_opt_des*DT
-    optimisation_h_history[idx, :] = h_opt/GAMMA
-    optimisation_hd_history[idx, :] = G_opt
+        # Save states
+        x_opt_history[idx, :] = x_opt_curr
+        xd_opt_history[idx, :] = xd_opt_des*DT
+        optimisation_h_history[idx, :] = h_opt/GAMMA
+        optimisation_hd_history[idx, :] = -G_opt
+        sqa_closest_history[idx, :] = xa_star
+        sqb_closest_history[idx, :] = xb_star
 
-    # Update current state for next iteration
-    x_opt_curr = next_x_opt
+        # Update current state for next iteration
+        x_opt_curr = next_x_opt
 
-circle_b = Ellipse(xb_init, width=2*Rb[0], height=2*Rb[1], color='r')
+s1 = SuperquadricObject(*Ra, *eps_a, pos=xa_init, quat=(1, 0, 0, 0))
+s2 = SuperquadricObject(*Rb, *eps_b, pos=xb_init, quat=(1, 0, 0, 0))
 
 plt.figure()
-ax = plt.gca()
-ax.add_patch(circle_b)
+ax = plt.subplot(111, projection='3d')
+ax.set_xlabel('x-axis')
+ax.set_ylabel('y-axis')
+s2.plot_sq(ax, 'red')
+ax.plot(x_opt_history[:, 0], x_opt_history[:, 1], x_opt_history[:, 2])
 
-for idx in range(0, STEPS):
-    circle_opt = Ellipse(x_opt_history[idx, :], width=2*Ra[0], height=2*Ra[1], color='g', alpha=0.5)
-    plt.axis('scaled')
-    ax.add_patch(circle_opt)
-    plt.draw()
-    plt.pause(DT)
-    circle_opt.remove()
+for idx in range(0, STEPS, int(TIME*2)):
+    s1_handle = s1.plot_sq(ax, 'green')
+    line_handle = ax.plot((sqa_closest_history[idx, 0], sqb_closest_history[idx, 0]),
+                          (sqa_closest_history[idx, 1], sqb_closest_history[idx, 1]),
+                          (sqa_closest_history[idx, 2], sqb_closest_history[idx, 2]), 'ro-')
+    plt.pause(1e-16)
+    s1_handle.remove()
+    line_handle[0].remove()
+    s1.set_pose(pos=x_opt_history[idx, :], quat=(1,0,0,0))
 
-ax.add_patch(circle_opt)
+s1_handle = s1.plot_sq(ax, 'green')
+line_handle = ax.plot((sqa_closest_history[idx, 0], sqb_closest_history[idx, 0]),
+                      (sqa_closest_history[idx, 1], sqb_closest_history[idx, 1]),
+                      (sqa_closest_history[idx, 2], sqb_closest_history[idx, 2]), 'ro-')
+
+if SAVE:
+    np.save('x_opt_history.npy', x_opt_history) # save
+    np.save('sqa_closest_history.npy', sqa_closest_history) # save
+    np.save('sqb_closest_history.npy', sqb_closest_history) # save
 
 # Plots
 dist_fig, dist_ax = plt.subplots(2)
 dist_fig.suptitle('h function')
-dist_ax[0].plot(range(0, STEPS-1), np.round(optimisation_h_history[1:, 0], 3), label="optimisation distance", color='g', lw=2)
-dist_ax[1].plot(range(0, STEPS-1), np.round(optimisation_hd_history[1:, 0], 3), label="optimisation grad", color='g', lw=2)
+dist_ax[1].plot(range(0, STEPS-1), np.round(optimisation_hd_history[1:, 0], 3), label="optimisation x grad", color='r', lw=2)
+dist_ax[1].plot(range(0, STEPS-1), np.round(optimisation_hd_history[1:, 1], 3), label="optimisation y grad", color='g', lw=2)
+dist_ax[1].plot(range(0, STEPS-1), np.round(optimisation_hd_history[1:, 2], 3), label="optimisation z grad", color='b', lw=2)
 dist_ax[0].legend(); dist_ax[1].legend()
 plt.show()
