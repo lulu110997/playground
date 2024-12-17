@@ -108,8 +108,8 @@ class MinDist2D(MinDist):
         """
         # Constraints, variables must lie on the surface of the sq
         self.constraints = [
-            ((self.xa[0] - self.ca[0]) / self.ra[0])**2 + ((self.xa[1] - self.ca[1]) / self.ra[1])**2 -1 <= 0,
-            ((self.xb[0] - self.cb[0]) / self.rb[0])**2 + ((self.xb[1] - self.cb[1]) / self.rb[1])**2 -1 <= 0
+            ((self.xa[0] - self.ca[0]) / self.ra[0])**(2/self.eps_a[1]) + ((self.xa[1] - self.ca[1]) / self.ra[1])**(2/self.eps_a[1]) -1 <= 0,
+            ((self.xb[0] - self.cb[0]) / self.rb[0])**(2/self.eps_b[1]) + ((self.xb[1] - self.cb[1]) / self.rb[1])**(2/self.eps_b[1]) -1 <= 0
         ]
 
         # Problem
@@ -281,7 +281,6 @@ class MinDist3DRot(MinDist):
         Returns: list(float..)  | [nabla_cxa_L, nabla_cya_L, nabla_cya_L, nabla_cyb_L]
         """
         return self.nabla_L(self.ca.value, self.ra, self.eps_a, self.qa.value, self.xa.value.squeeze(), self.constraints[0].dual_value).squeeze()
-
 
 class MinDist3DTransl(MinDist):
     """
