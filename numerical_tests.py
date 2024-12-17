@@ -301,6 +301,7 @@ def ellipse_test_rot(plot=False):
         # Create optimisation problem
         optimiser = MinDist3DRot(ca, cb, ra, rb, eps_a, eps_b, qa, qb, objective="NORM")
         xa, lagr_a, xb, lagr_b = optimiser.get_primal_dual_solutions(requires_grad=False)
+        xd, yd, zd, q0d, q1d, q2d, q3d = optimiser.sensitivity_analysis()
 
         if plot:
             fig = plt.figure()
@@ -310,6 +311,8 @@ def ellipse_test_rot(plot=False):
             ax.plot((xa[0], xb[0]), (xa[1], xb[1]), (xa[2], xb[2]), 'ro-')
             plt.xlabel('x-axis')
             plt.ylabel('y-axis')
+            ax.text2D(0.05, 0.95, f" {round(xd, 3)}, {round(yd, 3)}, {round(zd, 3)}   "
+                                  f" {round(q0d, 3)}, {round(q1d, 3)}, {round(q2d, 3)}, {round(q3d, 3)}",transform=ax.transAxes)
             plt.show()
 
 def ellipse_test_transl_grad(plot=False):
@@ -398,4 +401,4 @@ def sim_tester(plot=False):
             ax.axis('scaled')
             plt.show()
 
-sim_tester(1)
+# sim_tester(1)
