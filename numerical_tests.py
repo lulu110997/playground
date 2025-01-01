@@ -355,7 +355,7 @@ def ellipse_test_transl_grad(plot=False):
 
 
 # ellipse_test_transl(1)
-# ellipse_test_rot(1)
+ellipse_test_rot(1)
 # ellipse_test_transl_grad(0)
 
 ###################################################### Sim tests ########################################################

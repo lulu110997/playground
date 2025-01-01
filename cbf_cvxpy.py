@@ -4,12 +4,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 from roboticstoolbox.tools import trajectory
 from spatialmath import SE3
-import sympy as sym
 from VelocityControllers import VelocityController
-from min_dists import MinDist2D, MinDist3DTransl
+from min_dists import MinDist3DTransl
 from superquadric import SuperquadricObject
 
-REPLAY = False
+REPLAY = True
 SAVE = False
 
 ndim = 3  # 2 for 2D, 3 for 3D transl, 6 for 3D transl and rotation

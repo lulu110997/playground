@@ -19,17 +19,17 @@ Rb = (0.3, 0.3)  # Radius around the EE
 # Initial and target shape positions
 xa_init = (-1.25, -0.0)  # Obstacle position
 xb_init = (-0.001, 0.35)  # Obstacle position
-xa_tgt = (1.25, 0)  # Final position
+xa_tgt = (1.25, 0)  # Are you still okay to meetFinal position
 
 # Velocity limits
 UB = np.array([2.0, 2.0])  # Upper bound
 LB = np.array([-2.0, -2.0])  # Lower bound
 
 FREQ = 500.0
-TIME = 10.0
+TIME = 7.0
 DT = 1.0/FREQ
 STEPS = int(TIME/DT)
-SKIP_SCALE = 1.15
+SKIP_SCALE = 1.2
 
 def obtain_cbf():
     x_ee = sym.symbols('x_ee:2')
@@ -59,22 +59,16 @@ final_pose =SE2(xa_tgt)
 x_traj = trajectory.ctraj(initial_pose, final_pose, STEPS).t
 
 # Histories
-x_an_history = np.zeros((STEPS, 2))
 x_opt_history = np.zeros((STEPS, 2))
-xd_an_history = np.zeros((STEPS, 2))
 xd_opt_history = np.zeros((STEPS, 2))
+x_star_a = np.zeros((STEPS, 2))
 lagrange_history = np.zeros((STEPS, 2))
-analytical_h_history = np.zeros((STEPS, 1))
-analytical_hd_history = np.zeros((STEPS, 2))
 optimisation_h_history = np.zeros((STEPS, 1))
 optimisation_hd_history = np.zeros((STEPS, 2))
 
 hx, hx_dot = obtain_cbf()
 
-x_an_curr = np.array(xa_init)
 x_opt_curr = np.array(xa_init)
-
-x_an_history[0, :] = xa_init
 x_opt_history[0, :] = xa_init
 
 # Create optimiser
@@ -94,7 +88,7 @@ for idx in range(1, STEPS):
     next_x_opt = x_opt_curr + xd_opt_des*DT
 
     # Save states
-    x_an_history[idx, :] = x_an_curr
+    x_star_a[idx, :] = xa_star
     x_opt_history[idx, :] = x_opt_curr
     xd_opt_history[idx, :] = xd_opt_des*DT
     optimisation_h_history[idx, :] = h_opt/GAMMA
@@ -110,6 +104,8 @@ ax = plt.gca()
 ax.add_patch(circle_b)
 plt.ion()
 ax.plot(x_opt_history[:, 0], x_opt_history[:, 1])
+ax.plot(x_star_a[1:, 0], x_star_a[1:, 1])
+
 for idx in range(0, STEPS, int(TIME*SKIP_SCALE)):
     circle_opt = plt.Circle(x_opt_history[idx, :], Ra[0], color='g', alpha=0.5)
     plt.axis('scaled')
@@ -123,9 +119,7 @@ ax.add_patch(circle_opt)
 # Plots
 dist_fig, dist_ax = plt.subplots(2)
 dist_fig.suptitle('h function')
-dist_ax[0].plot(range(0, STEPS-1), np.round(analytical_h_history[1:, 0], 3), label="analytical distance", color='b', lw=2)
 dist_ax[0].plot(range(0, STEPS-1), np.round(optimisation_h_history[1:, 0], 3), label="optimisation distance", color='g', lw=2)
-dist_ax[1].plot(range(0, STEPS-1), np.round(analytical_hd_history[1:, 0], 3), label="analytical grad", color='b', lw=2)
 dist_ax[1].plot(range(0, STEPS-1), np.round(optimisation_hd_history[1:, 0], 3), label="optimisation grad", color='g', lw=2)
 dist_ax[0].legend(); dist_ax[1].legend()
 plt.show(block=True)
