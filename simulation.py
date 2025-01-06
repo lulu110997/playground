@@ -132,20 +132,20 @@ circle_b = plt.Circle(xb_init, Rb[0], color='r')
 # ax.add_patch(circle_opt)
 
 # Plots
-dist_fig, dist_ax = plt.subplots(2, figsize=(3.5, 3.5), dpi=200)
+plt.rc('legend', fontsize=6)
+
+dist_fig, dist_ax = plt.subplots(figsize=(3.5, 1.5), dpi=200)
 dist_fig.suptitle('Comparison of Analytical and Optimisation Values')
 
-# Plot optim vals
-dist_ax[0].plot(range(0, STEPS-1), np.round(optimisation_h_history[1:, 0], 3), label="Optimisation distance", color='#ff7f0e', lw=1.7)
-dist_ax[1].plot(range(0, STEPS-1), np.round(optimisation_hd_history[1:, 0], 3), label="Optimisation gradient", color='#ff7f0e', lw=1.7)
+dist_ax.set_xlabel('Steps')  #, fontsize=15)
+dist_ax.set_ylabel('Distance')  #, fontsize=15)
 
-# Plot analytical vals
-dist_ax[0].plot(range(0, STEPS-1), np.round(analytical_h_history[1:, 0], 3), label="Analytical distance", color='#1f77b4', lw=2, linestyle=(0, (5, 5)))
-dist_ax[1].plot(range(0, STEPS-1), np.round(analytical_hd_history[1:, 0], 3), label="Analytical gradient", color='#1f77b4', lw=2, linestyle=(0, (5, 5)))
-# TODO: Separate plots
-# TODO: Add axis titles
-# TODO: Remove BG color
-# TODO: Have one legend
-dist_ax[0].legend(); dist_ax[1].legend()
-plt.savefig('/home/louis/Pictures/2025/sim_result.svg', bbox_inches='tight')
-plt.show(block=True)
+# Plot vals
+dist_ax.plot(range(0, STEPS-1), np.round(optimisation_h_history[1:, 0], 3), label="Optimisation distance", color='#003f5c', lw=1.7)
+dist_ax.plot(range(0, STEPS-1), np.round(analytical_h_history[1:, 0], 3), label="Analytical distance", color='#ffa600', lw=2, linestyle=(0, (5, 5)))
+dist_ax.plot(range(0, STEPS-1), np.round(optimisation_hd_history[1:, 0], 3), label="Optimisation gradient", color='#94b83a', lw=1.7)
+dist_ax.plot(range(0, STEPS-1), np.round(analytical_hd_history[1:, 0], 3), label="Analytical gradient", color='#ef5675', lw=2, linestyle=(0, (5, 5)))
+dist_ax.legend()
+plt.savefig('/home/louis/Pictures/2025/sim_plots_results_combined.svg', bbox_inches='tight', transparent=True)
+
+# plt.show(block=True)
