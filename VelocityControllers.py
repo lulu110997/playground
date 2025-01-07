@@ -18,6 +18,9 @@ class VelocityController():
             translational and rotational velocities
             nconst: int | number of inequality constraints
         """
+        self.ndim = ndim
+        self.nconst = nconst
+
         # Velocities
         self.xd = cp.Variable(ndim)
         self.xd_tgt = cp.Parameter(ndim)
@@ -35,8 +38,21 @@ class VelocityController():
         self.prob.solve(solver='CLARABEL')
         return self.xd.value.squeeze()
 
-    def set_param(self, xd_tgt, G_matr, h_matr):
-        self.xd_tgt.value = xd_tgt
-        self.G.value = G_matr.reshape(1,3)
-        h_matr = np.array([h_matr])
-        self.h.value = h_matr
+    def set_param(self, xd_tgt, G_matr, h_matr, q=None):
+        if self.ndim == 3:
+            self.xd_tgt.value = xd_tgt
+            self.G.value = G_matr.reshape(self.nconst, self.ndim)
+            h_matr = np.array([h_matr])
+            self.h.value = h_matr
+        elif self.ndim == 6:
+            self.xd_tgt.value = xd_tgt.squeeze()  # vx,vy,vz,wx,wy,wz
+            Q = 0.5*np.array([
+                    [-q.vec[1], -q.vec[2], -q.vec[3]],
+                    [q.vec[0], -q.vec[3], q.vec[2]],
+                    [q.vec[3], q.vec[0], -q.vec[1]],
+                    [-q.vec[2], q.vec[1], q.vec[0]],
+                ])
+            # quat_d = G_matr[3:] @ Q  # xd,yd,zd,qwd,qxdy,qyd,qzd
+            self.G.value = np.hstack((G_matr[:3], G_matr[3:]@Q)).reshape(self.nconst, self.ndim)  # xd,yd,zd,qwd,qxdy,qyd,qzd
+            # h_matr = np.array([h_matr])
+            self.h.value = np.array([h_matr])
