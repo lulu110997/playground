@@ -12,7 +12,7 @@ from superquadric import SuperquadricObject
 import math
 
 
-def delta_rotation(angVel, deltaTime, q=UnitQuaternion()):
+def delta_rotation(angVel, deltaTime):
     # ha = angVel * (deltaTime * 0.5)  # vector of half angle
     # l = np.sqrt(np.sum(ha ** 2))  # magnitude
     #
@@ -26,9 +26,8 @@ def delta_rotation(angVel, deltaTime, q=UnitQuaternion()):
         [angVel[1], -angVel[2], 0, angVel[0]],
         [angVel[2], angVel[1], -angVel[0], 0]
     ])
-    delR = np.eye(4) + deltaTime*0.5*_Q@np.array(q)
-    print(delR)
-    return delR
+    delta_r = np.eye(4) + 0.5*_Q*deltaTime
+    return delta_r
 
 
 def calc_quat_error(q_curr: UnitQuaternion, q_desired: UnitQuaternion):
@@ -155,25 +154,28 @@ else:
 
         # Integrate to obtain forward pose
         next_x_opt = x_opt_curr + xd_opt_des[:3]*DT
-        dR = delta_rotation(omega, DT, q=qa_curr)
+        dR = delta_rotation(omega, DT)
         # next_qa = UnitQuaternion(s=qa_curr[0], v=qa_curr[1:])*dR
-        next_qa = qa_curr@dR
+        next_qa = dR@np.array(qa_curr)
         next_qa = tuple(next_qa / np.linalg.norm(next_qa))
+
         # TODO: is it the approximation?
+        # Update current state for next iteration
+        x_opt_curr = next_x_opt
+        qa_curr = next_qa
+
         # Save states
         x_opt_history[idx, :3] = x_opt_curr
         x_opt_history[idx, 3:] = qa_curr
 
-        # Update current state for next iteration
-        x_opt_curr = next_x_opt
-        qa_curr = next_qa
     print(1000*(cnt/STEPS))
 print(idx)
+print("t")
 print(x_opt_history[-1][:3])
 print(x_traj[-1].t)
-print(x_opt_history[-1][3:])
-print(UnitQuaternion(x_traj[-1].R).vec)
-
+print(f"quat actual {x_opt_history[-1][3:]}")
+print(f"quat desired {UnitQuaternion(x_traj[-1].R).vec}")
+# sys.exit()
 s1 = SuperquadricObject(*Ra, *eps_a, pos=xa_init, quat=qa_init)
 s2 = SuperquadricObject(*Rb, *eps_b, pos=xb_init, quat=qb_init)
 
