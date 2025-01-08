@@ -11,6 +11,15 @@ from min_dists import MinDist3DRot
 from superquadric import SuperquadricObject
 import math
 
+def skew(x):
+    """
+    skew operator
+    """
+    if x.ndim > 1:
+        x = x.squeeze()
+    return np.array([[0, -x[2], x[1]],
+                     [x[2], 0, -x[0]],
+                     [-x[1], x[0], 0]])
 
 def delta_rotation(angVel, deltaTime):
     # ha = angVel * (deltaTime * 0.5)  # vector of half angle
@@ -154,9 +163,13 @@ else:
 
         # Integrate to obtain forward pose
         next_x_opt = x_opt_curr + xd_opt_des[:3]*DT
-        dR = delta_rotation(omega, DT)
+        r2_t = x_traj[idx]
+        r1_t = UnitQuaternion(qa_curr).SE3()
+        theta, a_hat = SO3(r2_t.R @ r1_t.R.transpose()).angvec()  # eq28
+        dR = np.eye(3) + skew(a_hat) * np.sin(theta) + skew(a_hat) @ skew(a_hat) * (1 - np.cos(theta))
+        final = dR @ r1_t.R
         # next_qa = UnitQuaternion(s=qa_curr[0], v=qa_curr[1:])*dR
-        next_qa = dR@np.array(qa_curr)
+        next_qa = UnitQuaternion(final).vec
         next_qa = tuple(next_qa / np.linalg.norm(next_qa))
 
         # TODO: is it the approximation?
