@@ -66,7 +66,7 @@ class MinDist:
         if requires_grad:
             self.prob.solve(solver='SCS', requires_grad=True)
         else:
-            self.prob.solve(solver='CLARABEL')
+            self.prob.solve(solver='CLARABEL', warm_start=True)
         return self.xa.value.squeeze(), self.constraints[0].dual_value, self.xb.value.squeeze(), self.constraints[1].dual_value
 
     def get_optimal_value(self):
