@@ -65,7 +65,7 @@ def static_test():
 
         print("x* err", np.round(np.linalg.norm(cvxpy_x_star - casadi_x_star), 6))
         print("nu* err", np.round(np.linalg.norm(cvxpy_lambda_star - casadi_lambda_star), 6))
-        print("obj val err", np.round(np.linalg.norm(cvxpy_obj_val - casadi_lambda_star), 6))
+        print("obj val err", np.round(np.linalg.norm(cvxpy_obj_val - casadi_obj_val), 6))
         print('derivative err', np.round(np.linalg.norm((cvxpy_derivative - casadi_derivative)), 6))
 
         print('###########################################################################')
