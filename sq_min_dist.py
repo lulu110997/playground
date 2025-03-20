@@ -127,19 +127,12 @@ class hs071:
 
 
 def main():
-    a = time.time()
     #
     # Define the problem
     #
-    x0 = [0.1, 0.1, 0.1, 0.1, 1.1, 0.1]
+    # x0 = [0.1, 0.1, 0.1, 0.1, 1.1, 0.1]
+    x0 = [4.42037562e-01,  6.47993862e-01, -7.48187264e-10,  2.02340449e+00, 2.09475084e-02,  7.61081168e-10]
 
-    """
-    As requested I have started the refund process for order number AP1554979310. The amount of AUD 75.99 will be
-    returned to the credit card charged. Please allow 5-7 working (business) days to process and it will show up in your
-    next billing cycle (within 10 working days depending on your bank). Please, take a note of your refund confirmation
-    number RMA4515195.
-    89117282
-    """
 
     # Convert sq position from local to world frame, taking into account orientation of the sq
 
@@ -158,17 +151,17 @@ def main():
         lb=lb,
         ub=ub,
         cl=cl,
-        cu=cu,
+        cu=cu
         )
     # https://github.com/casadi/casadi/issues/2032
     # https://stackoverflow.com/questions/72944883/set-env-variable-for-hsl-so-ipopt-can-use-the-solver-ma57
-    # nlp.add_option("linear_solver", "ma27")
+    nlp.add_option("linear_solver", "ma27")  #ma27 or ma57
 
     #
     # Set solver options
     #
     #nlp.addOption('derivative_test', 'second-order')
-    nlp.add_option('mu_strategy', 'adaptive')
+    # nlp.add_option('mu_strategy', 'adaptive')
     nlp.add_option('tol', 1e-6)
 
     #
@@ -183,13 +176,15 @@ def main():
     #
     # Solve the problem
     #
+    # nlp.addOption('sb', 'yes')
+    # nlp.addOption('print_level', 0)
+    a = time.time()
     x, info = nlp.solve(x0)
 
-    print("Solution of the primal variables: x=%s\n" % repr(x))
+    # print("Solution of the primal variables: x=%s\n" % repr(x))
+    # print("Solution of the dual variables: lambda=%s\n" % repr(info['mult_g']))
+    # print("Objective=%s\n" % repr(info['obj_val']))
 
-    print("Solution of the dual variables: lambda=%s\n" % repr(info['mult_g']))
-
-    print("Objective=%s\n" % repr(info['obj_val']))
     print(time.time() - a)
 
 
