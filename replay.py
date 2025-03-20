@@ -43,8 +43,10 @@ def static_test():
         start_time = time.time()
         xa, lambda_a, xb, lambda_b = optimiser.get_primal_dual_solutions(requires_grad=False)
         print("cvxpy ", time.time() - start_time)
-        print(list(np.round(xa, 6)) + list(np.round(xb, 6)), np.round(lambda_a, 6), np.round(lambda_b, 6), np.round(optimiser.get_optimal_value(), 6))
-        print()
+        cvxpy_derivative = optimiser.sensitivity_analysis()
+        cvxpy_x_star = list(np.round(xa, 6)) + list(np.round(xb, 6))
+        cvxpy_lambda_star = np.round(lambda_a, 6), np.round(lambda_b, 6)
+        cvxpy_obj_val = np.round(optimiser.get_optimal_value(), 6)
 
         if nmb > 0:
             x_guess = x_star
@@ -56,9 +58,17 @@ def static_test():
         start_time = time.time()
         x_star, lambda_star = c_optimiser.get_primal_dual_solutions(x_guess)
         print("casadi ", time.time() - start_time)
-        print(np.round(x_star, 6), np.round(lambda_star, 6), np.round(c_optimiser.get_optimal_value(), 6))
-        print()
+        casadi_derivative = c_optimiser.sensitivity_analysis()
+        casadi_x_star = np.round(x_star, 6)
+        casadi_lambda_star = np.round(lambda_star, 6)
+        casadi_obj_val = np.round(c_optimiser.get_optimal_value(), 6)
 
+        print("x* err", np.round(np.linalg.norm(cvxpy_x_star - casadi_x_star), 6))
+        print("nu* err", np.round(np.linalg.norm(cvxpy_lambda_star - casadi_lambda_star), 6))
+        print("obj val err", np.round(np.linalg.norm(cvxpy_obj_val - casadi_lambda_star), 6))
+        print('derivative err', np.round(np.linalg.norm((cvxpy_derivative - casadi_derivative)), 6))
+
+        print('###########################################################################')
         ca_init[0] += 0.1
 
 
