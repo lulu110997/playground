@@ -14,20 +14,23 @@ SAVE = 0
 
 ndim = 6  # 2 for 2D, 3 for 3D transl, 6 for 3D transl and rotation
 
-# CBF param
-GAMMA = 0.4  # Used in CBF calculation
 
-# P gain
-Kv = 0.4  # position
-Kw = 1.0  # orientation
 
-# Shape param
+# CBF-QP parameters
+GAMMA = 0.4  # Used for CBF
+Kv = 0.5  # Gain for position
+Kw = 1.0  # Gain for orientation
+UB = np.array([0.2]*3 + [1.0]*3)  # Upper bound for linear velocity
+LB = np.array([-0.2]*3 + [-1.0]*3)  # Lower bound for angular velocity
+W = np.diag([1, 1, 1, 1, 1, 1])  # Weighting for the velocities
+
+# Superquadric parameters
 Ra = (0.12/2, 0.045/2, 0.27/2)
 Rb = (0.11, 0.0375, 0.11)
 eps_a = (0.1, 0.5)
-eps_b = (0.1, 0.5)
+eps_b = (0.1, 0.8)
 
-# Initial and target shape positions
+# Initial and target shape poses
 xb_init = (-0.545, -0.080, 0.15)  # Obstacle position
 # qb_init = (0.9659258, 0, 0, -0.258819)  # Obstacle orientation
 qb_init = (1.0, 0.0, 0.0, 0.0)  # Obstacle orientation
@@ -40,21 +43,15 @@ qa_tgt = qa_init
 # qa_tgt = (0.9396926, 0, 0, 0.3420201)
 # qa_tgt = (1, 0, 0, 0)  # Final robot orientation
 
-# Velocity limits
-UB = np.array([0.2]*3 + [1.0]*3)  # Upper bound
-LB = np.array([-0.2]*3 + [-1.0]*3)  # Lower bound
-
+# Simulation parameters
 FREQ = 100.0
 TIME = 15.0
-TIME_SCALE = 0.1
 DT = 1.0/FREQ
 STEPS = int(TIME/DT)
-
 SIM_START = 700
 SIM_END = 1050
+TIME_SCALE = 0.5
 # TODO: desired behaviour when traj is inside the obstacle?? note that the optimiser is tryuing to minimiuse the error as much as possible but this means 'staying' in the curr pos
-
-W = np.diag([100, 100, 100, 1, 1, 1])
 
 ########################################################################################################################
 
@@ -133,6 +130,7 @@ if __name__ == '__main__':
             # Save states
             x_opt_history[idx, :3] = x_opt_curr
             x_opt_history[idx, 3:] = qa_curr
+            xd_opt_history[idx, :] = xd_opt_des
             sqa_closest_history[idx, :] = x_star[:3]
             sqb_closest_history[idx, :] = x_star[3::]
             optimisation_h_history[idx, :] = h_opt/GAMMA
@@ -165,7 +163,10 @@ if __name__ == '__main__':
     for idx in range(SIM_START, SIM_END, int(TIME*TIME_SCALE)):
         s1_handle = s1.plot_sq(ax, 'green')
         traj_handle = ax.scatter(x_traj[idx].t[0], x_traj[idx].t[1], x_traj[idx].t[2], color='g', marker='o', linewidth=2)
+        curr_pos_handle = ax.scatter(x_opt_history[idx, 0], x_opt_history[idx, 1], x_opt_history[idx, 2], color='blue', marker='o', alpha=0.5)
 
+        vel_handle = ax.quiver(x_opt_history[idx, 0], x_opt_history[idx, 1], x_opt_history[idx, 2],
+                               xd_opt_history[idx, 0], xd_opt_history[idx, 1], xd_opt_history[idx, 2])
         line_handle = ax.plot((sqa_closest_history[idx, 0], sqb_closest_history[idx, 0]),
                               (sqa_closest_history[idx, 1], sqb_closest_history[idx, 1]),
                               (sqa_closest_history[idx, 2], sqb_closest_history[idx, 2]), 'ro-')
@@ -173,6 +174,8 @@ if __name__ == '__main__':
         s1_handle.remove()
         line_handle[0].remove()
         traj_handle.remove()
+        curr_pos_handle.remove()
+        vel_handle.remove()
         s1.set_pose(pos=x_opt_history[idx, :3], quat=tuple(x_opt_history[idx, 3:]))
 
     s1_handle = s1.plot_sq(ax, 'green')
