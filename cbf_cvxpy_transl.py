@@ -63,7 +63,7 @@ x_an_history[0, :] = xa_init
 x_opt_history[0, :] = xa_init
 
 if REPLAY:
-    x_opt_history = np.load('x_opt_history.npy')  # load
+    x_opt_history = np.load('with_ori_3Drot.npy')  # load
     sqa_closest_history = np.load('sqa_closest_history.npy')
     sqb_closest_history = np.load('sqb_closest_history.npy')
 else:
@@ -126,7 +126,7 @@ line_handle = ax.plot((sqa_closest_history[idx, 0], sqb_closest_history[idx, 0])
                       (sqa_closest_history[idx, 2], sqb_closest_history[idx, 2]), 'ro-')
 
 if SAVE:
-    np.save('x_opt_history.npy', x_opt_history) # save
+    np.save('with_ori_3Drot.npy', x_opt_history) # save
     np.save('sqa_closest_history.npy', sqa_closest_history) # save
     np.save('sqb_closest_history.npy', sqb_closest_history) # save
 

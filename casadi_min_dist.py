@@ -54,7 +54,7 @@ class MinDist:
         """
         raise 'Must be setup in the child class'
 
-    def get_primal_dual_solutions(self, x_guess=None):
+    def get_primal_dual_solutions(self, x_guess):
         """
         Get the points where the minimum distance occurs and the corresponding dual variables
         Args:
@@ -67,7 +67,7 @@ class MinDist:
                      lbx=self.X_BOUNDS[0], ubx=self.X_BOUNDS[1])
         self.x_opt = r['x'].elements()
         self.nu = r['lam_g'].elements()
-        self.obj_val = r['f'].elements()
+        self.obj_val = r['f'].elements()[0]
         return self.x_opt, self.nu
 
     def get_optimal_value(self):
@@ -87,66 +87,6 @@ class MinDist:
         self.cb = cb
         self.params = self.ca + self.cb
 
-
-class MinDist2D(MinDist):
-    """
-    Class for calculating the minimum distance between two superquadric shapes
-    """
-    def __init__(self, ca, cb, ra, rb, eps_a=2.0, eps_b=2.0, objective="SOS"):
-        """
-        Parent class for the other classes to calculate minimum distance between two superquadrics
-        Args:
-            ca, cb: Tuple[float] | Represents the centre position of each superquadric in the world frame
-            ra, rb: Tuple[float] | Represents the radii of each superquadric
-            eps_a, eps_b: Tuple[float] | Represents the roundness parameter (eps1, eps2) of each superquadric
-            objective: String | The objective function for the minimisation problem. Defaults to sum of squares (SOS)
-        """
-        super().__init__(ca, cb, ra, rb, eps_a, eps_b, objective)
-        self._set_problem()
-
-    def _set_problem(self):
-        """
-        Inside-outside function for the 2D case considering only translation
-        """
-        # Constraints, variables must lie on the surface of the sq
-        self.constraints = [
-            ((self.xa[0] - self.ca[0]) / self.ra[0])**(2/self.eps_a[1]) + ((self.xa[1] - self.ca[1]) / self.ra[1])**(2/self.eps_a[1]) -1 <= 0,
-            ((self.xb[0] - self.cb[0]) / self.rb[0])**(2/self.eps_b[1]) + ((self.xb[1] - self.cb[1]) / self.rb[1])**(2/self.eps_b[1]) -1 <= 0
-        ]
-
-        # Problem
-        self.prob = cp.Problem(self.objective, self.constraints)
-
-    def sensitivity_analysis(self):
-        """
-        Return the gradient of Lagrangian wrt problem parameters
-        Returns: list(float..)  | [nabla_cxa_L, nabla_cya_L, nabla_cya_L, nabla_cyb_L]
-        """
-        return [-2*self.constraints[0].dual_value*((self.xa.value[0] - self.ca.value[0]) / self.ra[0]**2),
-                -2*self.constraints[0].dual_value*((self.xa.value[1] - self.ca.value[1]) / self.ra[1]**2),
-                -2*self.constraints[1].dual_value*((self.xb.value[0] - self.cb.value[0]) / self.rb[0]**2),
-                -2*self.constraints[1].dual_value*((self.xb.value[1] - self.cb.value[1]) / self.rb[1]**2)]
-
-    def sensitivity_cvxpy(self):
-        """
-        Sensitivity analysis through cvxpy
-        Returns: tuple(np.array, np.array) | [arr(nabla_cxa_L, nabla_cya_L), arr(nabla_cya_L, nabla_cyb_L)]
-
-        More generally, the backward method can be used to compute the gradient of a scalar-valued function f of the
-        optimal variables, with respect to the parameters. If x(p) denotes the optimal value of the variable
-        (which might be a vector or a matrix) for a particular value of the parameter p and f(x(p)) is a scalar, then
-        backward can be used to compute the gradient of f with respect to p. Let x* = x(p), and say the derivative of f
-        with respect to x* is dx. To compute the derivative of f with respect to p, before calling problem.backward(),
-        just set x.gradient = dx.
-
-        The backward method can be powerful when combined with software for automatic differentiation. We recommend the
-        software package CVXPY Layers, which provides differentiable PyTorch and TensorFlow wrappers for CVXPY problems.
-        """
-        delta_x = 2*(self.xa - self.xb)  # Gradient of objective function wrt decision variables
-        self.xa.gradient = delta_x.value
-        self.xb.gradient = -delta_x.value
-        self.prob.backward()
-        return self.ca.gradient.squeeze(), self.cb.gradient.squeeze()
 
 class MinDist3D(MinDist):
     """
@@ -247,28 +187,12 @@ class MinDist3D(MinDist):
         qa_vec = qa.to_Matrix()
 
         SQ_a_rotation = qa.to_rotation_matrix(homogeneous=True)
-        SQ_a_pose = SQ_a_rotation.transpose() @ (sympy.Abs(xa - ca)).transpose()
+        SQ_a_pose = SQ_a_rotation.transpose() @ (xa - ca).transpose()
 
-        xa_w = (SQ_a_pose[0] / ra[0]) ** (2.0 / eps_a[1])
-        ya_w = (SQ_a_pose[1] / ra[1]) ** (2.0 / eps_a[1])
-        za_w = (SQ_a_pose[2] / ra[2]) ** (2.0 / eps_a[0])
+        xa_w = (sympy.Abs(SQ_a_pose[0]) / ra[0]) ** (2.0 / eps_a[1])
+        ya_w = (sympy.Abs(SQ_a_pose[1]) / ra[1]) ** (2.0 / eps_a[1])
+        za_w = (sympy.Abs(SQ_a_pose[2]) / ra[2]) ** (2.0 / eps_a[0])
         f1 = ((xa_w + ya_w) ** (eps_a[1] / eps_a[0])) + za_w - 1.0
-
-        # xb = sympy.symbols('xb:3', real=True)
-        # cb = sympy.symbols('cb:3', real=True)
-        # rb = sympy.symbols('rb:3', real=True)
-        # eps_b = sympy.symbols('epsb:2', real=True)
-        # qb = sympy.symbols('qb:4', real=True)
-        # xb = sympy.Matrix([[xb[0], xb[1], xb[2]]])
-        # cb = sympy.Matrix([[cb[0], cb[1], cb[2]]])
-        # rb = sympy.Matrix([[rb[0], rb[1], rb[2]]])
-        # eps_b = sympy.Matrix([[eps_b[0], eps_b[1]]])
-        # qb = sympy.algebras.Quaternion(qb[0], qb[1], qb[2], qb[3])  # w, x, y, z
-        # qb_vec = qb.to_Matrix()
-        # xb_w = (sympy.Abs(xb[0] - cb[0]) / rb[0]) ** (2.0 / eps_b[1])
-        # yb_w = (sympy.Abs(xb[1] - cb[1]) / rb[1]) ** (2.0 / eps_b[1])
-        # zb_w = (sympy.Abs(xb[2] - cb[2]) / rb[2]) ** (2.0 / eps_b[0])
-        # f2 = ((xb_w + yb_w) ** (eps_b[1] / eps_b[0])) + zb_w - 1.0
 
         f1_diff = nu_a*sympy.Matrix([f1.diff(ca[0]), f1.diff(ca[1]), f1.diff(ca[2]),
                                       f1.diff(qa_vec[0]), f1.diff(qa_vec[1]), f1.diff(qa_vec[2]), f1.diff(qa_vec[3])])
@@ -300,54 +224,72 @@ class MinDist3DTransl(MinDist):
     """
     Class for calculating the minimum distance between two ellipse type shapes
     """
-    def __init__(self, ca, cb, ra, rb, eps_a, eps_b, objective="SOS"):
+    def __init__(self, ca, cb, ra, rb, eps_a, eps_b):
         """
         Args:
             ca, cb: Tuple[float] | Represents the centre position (xyz) of each superquadric in the world frame
             ra, rb: Tuple[float] | Represents the radii (abc) of each superquadric
             eps_a, eps_b: Tuple[float] | Represents the roundness parameter (eps1, eps2) of each superquadric
-            objective: String | The objective function for the minimisation problem. Defaults to sum of squares (SOS)
         """
-        super().__init__(ca, cb, ra, rb, eps_a, eps_b, objective)
+        super().__init__(ca, cb, ra, rb, eps_a, eps_b)
+        self.params = self.ca + self.cb
         self._set_problem()
 
     def _set_problem(self):
         """
         Inside-outside function for the 3D case considering only translation
         """
+        # Define parameters
+        ca = casadi.SX.sym("ca", self.ndim)
+        cb = casadi.SX.sym("cb", self.ndim)
+
         # Constraints, variables must lie on the surface of the sq
-        xa_w = (cp.abs(self.xa[0] - self.ca[0]) / self.ra[0])**(2.0/self.eps_a[1])
-        ya_w = (cp.abs(self.xa[1] - self.ca[1]) / self.ra[1])**(2.0/self.eps_a[1])
-        za_w = (cp.abs(self.xa[2] - self.ca[2]) / self.ra[2])**(2.0/self.eps_a[0])
-        xb_w = (cp.abs(self.xb[0] - self.cb[0]) / self.rb[0])**(2.0/self.eps_b[1])
-        yb_w = (cp.abs(self.xb[1] - self.cb[1]) / self.rb[1])**(2.0/self.eps_b[1])
-        zb_w = (cp.abs(self.xb[2] - self.cb[2]) / self.rb[2])**(2.0/self.eps_b[0])
+        xa_w = (casadi.fabs(self.xa[0] - ca[0]) / self.ra[0])**(2.0/self.eps_a[1])
+        ya_w = (casadi.fabs(self.xa[1] - ca[1]) / self.ra[1])**(2.0/self.eps_a[1])
+        za_w = (casadi.fabs(self.xa[2] - ca[2]) / self.ra[2])**(2.0/self.eps_a[0])
+        xb_w = (casadi.fabs(self.xb[0] - cb[0]) / self.rb[0])**(2.0/self.eps_b[1])
+        yb_w = (casadi.fabs(self.xb[1] - cb[1]) / self.rb[1])**(2.0/self.eps_b[1])
+        zb_w = (casadi.fabs(self.xb[2] - cb[2]) / self.rb[2])**(2.0/self.eps_b[0])
+
+        # Concatenate constraints into a vector
+        c1 = casadi.cse(((xa_w + ya_w) ** (self.eps_a[1] / self.eps_a[0])) + za_w - 1)
+        c2 = casadi.cse(((xb_w + yb_w) ** (self.eps_b[1] / self.eps_b[0])) + zb_w - 1)
+
+
+        # Set attributes
+        constraints = casadi.vertcat(c1, c2)
+        problem_pars = casadi.vertcat(ca, cb)
+
+
+        # Define the nlp problem and set the solver
+        nlp = {'x': self.decision_vars, 'f': self.objective, 'g': constraints, 'p': problem_pars}
+        self.nlp = casadi.nlpsol('S', 'ipopt', nlp,
+                         {'ipopt':{'linear_solver': 'ma27', "hsllib": "/usr/local/lib/libcoinhsl.so", "sb": 'yes',
+                                   'print_level':0, "mu_strategy":"adaptive"}, "verbose": False,  'print_time':0})
         self.constraints = [
             ((xa_w + ya_w)**(self.eps_a[1]/self.eps_a[0])) + za_w - 1.0 <= 0,
             ((xb_w + yb_w)**(self.eps_b[1]/self.eps_b[0])) + zb_w - 1.0 <= 0
         ]
 
         # Problem
-        self.prob = cp.Problem(self.objective, self.constraints)
-        assert self.prob.is_dcp()
+        # self.prob = casadi.Problem(self.objective, self.constraints)
 
     def sensitivity_analysis(self):
         """
-        TODO: change for 3D
         Return the gradient of Lagrangian wrt problem parameters
         Returns: list(float..)  | [nabla_cxa_L, nabla_cya_L, nabla_cya_L, nabla_cyb_L]
         """
-        xd = math.copysign((2.0 * (cp.abs(self.ca[0] - self.xa[0]) / self.ra[0]) ** (2.0 / self.eps_a[1]) * (
-                (cp.abs(self.ca[0] - self.xa[0]) / self.ra[0]) ** (2.0 / self.eps_a[1]) + (cp.abs(self.ca[1] - self.xa[1]) / self.ra[1]) ** (2.0 / self.eps_a[1])) ** (
-                self.eps_a[1] / self.eps_a[0])).value, (self.ca[0] - self.xa[0]).value) / (
-                self.eps_a[0] * ((cp.abs(self.ca[0] - self.xa[0]) / self.ra[0]) ** (2.0 / self.eps_a[1]) + (cp.abs(self.ca[1] - self.xa[1]) / self.ra[1]) ** (2.0 / self.eps_a[1])) * cp.abs(self.ca[0] - self.xa[0]))
-        yd = math.copysign((2.0 * (cp.abs(self.ca[1] - self.xa[1]) / self.ra[1]) ** (2.0 / self.eps_a[1]) * (
-                (cp.abs(self.ca[0] - self.xa[0]) / self.ra[0]) ** (2.0 / self.eps_a[1]) + (cp.abs(self.ca[1] - self.xa[1]) / self.ra[1]) ** (2.0 / self.eps_a[1])) ** (
-                self.eps_a[1] / self.eps_a[0])).value, (self.ca[1] - self.xa[1]).value) / (
-                self.eps_a[0] * ((cp.abs(self.ca[0] - self.xa[0]) / self.ra[0]) ** (2.0 / self.eps_a[1]) + (cp.abs(self.ca[1] - self.xa[1]) / self.ra[1]) ** (2.0 / self.eps_a[1])) * cp.abs(
-            self.ca[1] - self.xa[1]))
-        zd = math.copysign((2.0 * (cp.abs(self.ca[2] - self.xa[2]) / self.ra[2]) ** (2.0 / self.eps_a[0])).value, (self.ca[2] - self.xa[2]).value) / (self.eps_a[0] * cp.abs(self.ca[2] - self.xa[2]))
-        return self.constraints[0].dual_value*xd.value, self.constraints[0].dual_value*yd.value, self.constraints[0].dual_value*zd.value
+        xd = math.copysign((2.0 * (casadi.fabs(self.ca[0] - self.x_opt[0]) / self.ra[0]) ** (2.0 / self.eps_a[1]) * (
+                (casadi.fabs(self.ca[0] - self.x_opt[0]) / self.ra[0]) ** (2.0 / self.eps_a[1]) + (casadi.fabs(self.ca[1] - self.x_opt[1]) / self.ra[1]) ** (2.0 / self.eps_a[1])) ** (
+                self.eps_a[1] / self.eps_a[0])), (self.ca[0] - self.x_opt[0])) / (
+                self.eps_a[0] * ((casadi.fabs(self.ca[0] - self.x_opt[0]) / self.ra[0]) ** (2.0 / self.eps_a[1]) + (casadi.fabs(self.ca[1] - self.x_opt[1]) / self.ra[1]) ** (2.0 / self.eps_a[1])) * casadi.fabs(self.ca[0] - self.x_opt[0]))
+        yd = math.copysign((2.0 * (casadi.fabs(self.ca[1] - self.x_opt[1]) / self.ra[1]) ** (2.0 / self.eps_a[1]) * (
+                (casadi.fabs(self.ca[0] - self.x_opt[0]) / self.ra[0]) ** (2.0 / self.eps_a[1]) + (casadi.fabs(self.ca[1] - self.x_opt[1]) / self.ra[1]) ** (2.0 / self.eps_a[1])) ** (
+                self.eps_a[1] / self.eps_a[0])), (self.ca[1] - self.x_opt[1])) / (
+                self.eps_a[0] * ((casadi.fabs(self.ca[0] - self.x_opt[0]) / self.ra[0]) ** (2.0 / self.eps_a[1]) + (casadi.fabs(self.ca[1] - self.x_opt[1]) / self.ra[1]) ** (2.0 / self.eps_a[1])) * casadi.fabs(
+            self.ca[1] - self.x_opt[1]))
+        zd = math.copysign((2.0 * (casadi.fabs(self.ca[2] - self.x_opt[2]) / self.ra[2]) ** (2.0 / self.eps_a[0])), (self.ca[2] - self.x_opt[2])) / (self.eps_a[0] * casadi.fabs(self.ca[2] - self.x_opt[2]))
+        return self.nu[0]*xd, self.nu[0]*yd, self.nu[0]*zd
 
 
 if __name__ == "__main__":
