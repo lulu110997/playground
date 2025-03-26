@@ -11,7 +11,7 @@ class VelocityController():
     CBF constraints.
     """
 
-    def __init__(self, ndim=3, nconst=1):
+    def __init__(self, ndim=3, nconst=1, W=None):
         """
         Args:
             ndim: int | number of dimensions we are considering. 2 for xy velocity, 3 for xyz velocity and 6 for xyz
@@ -21,6 +21,9 @@ class VelocityController():
         self.ndim = ndim
         self.nconst = nconst
 
+        if W is None:
+            W = np.eye(self.ndim)
+
         # Velocities
         self.xd = cp.Variable(ndim)
         self.xd_tgt = cp.Parameter(ndim)
@@ -28,8 +31,7 @@ class VelocityController():
         # CBF constraints in matrix form
         self.G = cp.Parameter((nconst, ndim))
         self.h = cp.Parameter(nconst)
-
-        self.objective = cp.Minimize(cp.norm(self.xd - self.xd_tgt))
+        self.objective = cp.Minimize(cp.norm((W**0.5)@(self.xd - self.xd_tgt)))
         self.constraints = [self.G@self.xd - self.h <= 0]
 
         self.prob = cp.Problem(self.objective, self.constraints)
