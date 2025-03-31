@@ -43,7 +43,7 @@ class SuperquadricObject:
         if quat is None:
             self.quat = Quaternion((1, 0, 0, 0))
         else:
-            if isinstance(quat, tuple):
+            if isinstance(quat, (list, tuple)):
                 self.quat = Quaternion(quat)
             else:
                 raise ValueError("Bad input to quat argument")
