@@ -10,7 +10,9 @@ function get_α_J(rs::Vector{Float64}, qs::Vector{Float64})
     polygon.q = sa.SVector{4}(qs[5:8])
 
     # compute the minimum uniform scaling factor and Jacobian
-    α, _, J = dc.proximity_jacobian(ellipsoid, polygon; verbose=false, pdip_tol=1e-6)
+#     α, x_int, J = dc.proximity_jacobian(ellipsoid, polygon; verbose=false, pdip_tol=1e-6)
+#     return α, x_int, J
 
+    α, J = dc.proximity_gradient(ellipsoid, polygon; verbose=false, pdip_tol=1e-6)
     return α, J
 end

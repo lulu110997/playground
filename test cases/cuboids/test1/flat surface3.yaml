@@ -1,0 +1,27 @@
+# CBF-QP parameters
+GAMMA: 0.4  # Used for CBF
+Kv: 0.5  # Gain for position
+Kw: 1.0  # Gain for orientation
+VB: [0.2, 0.2, 0.2, 1.0, 1.0, 1.0]  # Velocity bounds
+W: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]  # Weighting for the velocities
+
+# Superquadric parameters
+Ra: [0.06, 0.0225, 0.135]
+Rb: [0.11, 0.0375, 0.11]
+eps_a: [0.1, 0.1]
+eps_b: [0.1, 0.1]
+
+# Initial and target shape poses
+xb_init: [-0.545, -0.080, 0.15]  # Obstacle position
+qb_init: [0.9961947, 0, 0, -0.0871557]  # Obstacle orientation
+xa_init: [-0.454, 0.5, 0.29]  # Initial robot position
+qa_init: [1.0, 0, 0, 0.0]  # Initial robot orientation
+xa_tgt: [-0.454, -0.5, 0.29]  # Final robot position
+qa_tgt: [1.0, 0.0, 0.0, 0.0]  # Final robot orientation
+
+# Simulation parameters
+FREQ: 100.0
+TIME: 15.0
+SIM_START: 850
+SIM_END: 1300
+TIME_SCALE: 0.5

@@ -29,6 +29,7 @@ class VelocityController():
         # Velocities
         self.xd = cp.Variable(ndim)
         self.xd_tgt = cp.Parameter(ndim)
+        self.xd_prev = cp.Parameter(ndim, value = np.zeros((ndim,)))
 
         # CBF constraints in matrix form
         self.G = cp.Parameter((nconst, ndim))
@@ -37,6 +38,7 @@ class VelocityController():
         self.constraints = [
             self.G@self.xd - self.h <= 0,
             self.xd <= ub, lb <= self.xd
+            ,cp.norm(self.xd - self.xd_prev) <= 0.04
         ]
 
         self.prob = cp.Problem(self.objective, self.constraints)
@@ -45,7 +47,8 @@ class VelocityController():
         self.prob.solve(solver='CLARABEL')
         return self.xd.value.squeeze()
 
-    def set_param(self, xd_tgt, G_matr, h_matr, q=None):
+    def set_param(self, xd_tgt, xd_prev, G_matr, h_matr, q=None):
+        self.xd_prev.value = xd_prev
         if self.ndim == 3:
             self.xd_tgt.value = xd_tgt
             self.G.value = G_matr.reshape(self.nconst, self.ndim)

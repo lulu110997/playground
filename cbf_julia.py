@@ -1,3 +1,4 @@
+from sklearn.metrics import mean_squared_error
 import time
 import yaml
 import matplotlib.pyplot as plt
@@ -28,7 +29,8 @@ with open(f"test cases/{TEST_TYPE}/{TEST_DIR}/{TEST_NAME}.yaml") as file:
 ndim = 6  # 2 for 2D, 3 for 3D transl, 6 for 3D transl and rotation
 
 # CBF-QP parameters
-GAMMA = params['GAMMA']  # Used for CBF
+GAMMA = params['GAMMA']  # Used in CBF
+BETA = params['BETA']  # Used in DCOL
 Kv = params['Kv']  # Gain for position
 Kw = params['Kw']  # Gain for orientation
 UB = np.array(params['VB'])  # Upper bound for linear velocity
@@ -87,7 +89,8 @@ if __name__ == '__main__':
         sqa_closest_history = np.zeros((STEPS, 3))
         sqb_closest_history = np.zeros((STEPS, 3))
         optimisation_h_history = np.zeros((STEPS, 1))
-        optimisation_hd_history = np.zeros((STEPS, ndim))
+        optimisation_hd_history = np.zeros((STEPS, ndim+1))
+        tracking_err_history = np.zeros((STEPS, 4))
 
         x_opt_curr = np.array(xa_init)
         qa_curr = qa_init
@@ -96,12 +99,14 @@ if __name__ == '__main__':
         x_opt_history[0, 3:] = qa_init
 
         # Create optimiser
-        vel_cont = VelocityController(ndim, 1, W=W)
+        vel_cont = VelocityController(UB, LB, ndim, 1, W=W)
         cnt = 0
         x_star = [0.1, 0.1, 0.1, 0, 0, 0]
 
         # Control loop
         for idx in range(1, STEPS):
+            acnt = time.time()
+
             # Change parameters of ellipse and polygon
             rs = np.array([*x_opt_curr, *xb_init])
             qs = np.array([*qa_curr, *qb_init])
@@ -112,12 +117,12 @@ if __name__ == '__main__':
             vel = np.array(((Kv*x_error) / DT, (Kw*theta*a_hat) / DT)).reshape(6, 1)
 
             # CBF stuff
-            acnt = time.time()
-            h_opt, G_opt = get_α_J(rs, qs)  #TODO: Find a way to extract distance and point where min dist occurs
+            # alpha, x_inter, G_opt = get_α_J(rs, qs)
+            alpha, G_opt = get_α_J(rs, qs)
             # https://github.com/BolunDai0216/DifferentiableOptimizationCBF/issues/6#issuecomment-2708300188
-            h_opt = GAMMA * h_opt - 1 # CBF exponential gamma*hx
-            G_opt = -np.array(G_opt[-1][:7])  # CBF derivative, assuming that object 1 is the ee
-            cnt += time.time() - acnt
+            h_opt = GAMMA * (alpha - BETA) # CBF exponential gamma*hx
+            # G_opt = -np.array(G_opt[-1][:7])  # CBF derivative, assuming that object 1 is the ee
+            G_opt = -np.array(G_opt[:7])  # CBF derivative, assuming that object 1 is the ee
             vel_cont.set_param(vel, G_opt, h_opt, UnitQuaternion(qa_curr))
             xd_opt_des = vel_cont.get_solution()
 
@@ -133,14 +138,20 @@ if __name__ == '__main__':
             x_opt_curr = next_x_opt
             qa_curr = next_qa.vec
 
+            # Obtain closest points
+            # pa = x_opt_curr + (x_inter - x_opt_curr)/alpha
+            # pb = np.array(xb_init) + (x_inter - np.array(xb_init))/alpha
             # Save states
             x_opt_history[idx, :3] = x_opt_curr
             x_opt_history[idx, 3:] = qa_curr
             xd_opt_history[idx, :] = xd_opt_des
-            sqa_closest_history[idx, :] = x_star[:3]
-            sqb_closest_history[idx, :] = x_star[3::]
+            # sqa_closest_history[idx, :] = pa
+            # sqb_closest_history[idx, :] = pb
             optimisation_h_history[idx, :] = h_opt/GAMMA
-            optimisation_hd_history[idx, :3] = G_opt[:3]
+            optimisation_hd_history[idx, :] = G_opt
+            tracking_err_history[idx, :3] = x_error
+            tracking_err_history[idx, 3] = theta
+            cnt += time.time() - acnt
 
         print(f"{1000*(cnt/STEPS)} ms/iter")
 
@@ -169,6 +180,7 @@ if __name__ == '__main__':
     ax.plot(x_traj.t[:,0], x_traj.t[:,1], x_traj.t[:,2], color='g')
     ax.scatter(x_opt_history[::200, 0], x_opt_history[::200, 1], x_opt_history[::200, 2], color='black', marker='x', linewidths=1.5)
 
+    ax.view_init(10, -60 ,0)
     for idx in range(SIM_START, SIM_END, int(TIME*TIME_SCALE)):
         s1_handle = s1.plot_sq(ax, 'green')
         traj_handle = ax.scatter(x_traj[idx].t[0], x_traj[idx].t[1], x_traj[idx].t[2], color='g', marker='o', linewidth=2)
@@ -182,7 +194,7 @@ if __name__ == '__main__':
 
         if plt.isinteractive():
             while not plt.waitforbuttonpress():
-                plt.pause(1e-16)
+                plt.pause(1e-6)
         else:
             plt.pause(1e-16)
 
@@ -196,12 +208,47 @@ if __name__ == '__main__':
         s1.set_pose(pos=x_opt_history[idx, :3], quat=tuple(x_opt_history[idx, 3:]))
 
     # Plots
-    dist_fig, dist_ax = plt.subplots(2)
-    dist_fig.suptitle('h function')
-    dist_ax[0].plot(range(optimisation_h_history.shape[0]-1), np.round(optimisation_h_history[1:, 0], 3), label="distance", color='r', lw=2)
+    # CBF
+    cbf_fig, cbf_ax = plt.subplots()
+    cbf_fig.suptitle('h value')
+    cbf_ax.plot(range(optimisation_h_history.shape[0]-1), np.round(optimisation_h_history[1:, 0], 3), label="CBF value", color='r', lw=2)
+    cbf_ax.legend()
 
-    dist_ax[1].plot(range(optimisation_hd_history.shape[0]-1), np.round(optimisation_hd_history[1:, 0], 3), label="optimisation x grad", color='r', lw=2)
-    dist_ax[1].plot(range(optimisation_hd_history.shape[0]-1), np.round(optimisation_hd_history[1:, 1], 3), label="optimisation y grad", color='g', lw=2)
-    dist_ax[1].plot(range(optimisation_hd_history.shape[0]-1), np.round(optimisation_hd_history[1:, 2], 3), label="optimisation z grad", color='b', lw=2)
-    dist_ax[0].legend(); dist_ax[1].legend()
+    # CBF derivative
+    cbfd_fig, cbfd_ax = plt.subplots(2)
+    cbfd_fig.suptitle('hd values')
+    cbfd_ax[0].plot(range(optimisation_hd_history.shape[0]-1), np.round(optimisation_hd_history[1:, 0], 3), label="optimisation x grad", lw=2)
+    cbfd_ax[0].plot(range(optimisation_hd_history.shape[0]-1), np.round(optimisation_hd_history[1:, 1], 3), label="optimisation y grad", lw=2)
+    cbfd_ax[0].plot(range(optimisation_hd_history.shape[0]-1), np.round(optimisation_hd_history[1:, 2], 3), label="optimisation z grad", lw=2)
+    cbfd_ax[1].plot(range(optimisation_hd_history.shape[0]-1), np.round(optimisation_hd_history[1:, 3], 3), label="optimisation qw grad", lw=2)
+    cbfd_ax[1].plot(range(optimisation_hd_history.shape[0]-1), np.round(optimisation_hd_history[1:, 4], 3), label="optimisation qx grad", lw=2)
+    cbfd_ax[1].plot(range(optimisation_hd_history.shape[0]-1), np.round(optimisation_hd_history[1:, 5], 3), label="optimisation qy grad", lw=2)
+    cbfd_ax[1].plot(range(optimisation_hd_history.shape[0]-1), np.round(optimisation_hd_history[1:, 6], 3), label="optimisation qz grad", lw=2)
+    cbfd_ax[0].legend(); cbfd_ax[1].legend()
+
+    # Velocities
+    vel_fig, vel_ax = plt.subplots(2)
+    vel_fig.suptitle('Velocities')
+    vel_ax[0].plot(range(xd_opt_history.shape[0] - 1), np.round(xd_opt_history[1:, 0], 3), label="vx", lw=2)
+    vel_ax[0].plot(range(xd_opt_history.shape[0] - 1), np.round(xd_opt_history[1:, 1], 3), label="vy", lw=2)
+    vel_ax[0].plot(range(xd_opt_history.shape[0] - 1), np.round(xd_opt_history[1:, 2], 3), label="vz", lw=2)
+    vel_ax[1].plot(range(xd_opt_history.shape[0] - 1), np.round(xd_opt_history[1:, 3], 3), label="wx", lw=2)
+    vel_ax[1].plot(range(xd_opt_history.shape[0] - 1), np.round(xd_opt_history[1:, 4], 3), label="wy", lw=2)
+    vel_ax[1].plot(range(xd_opt_history.shape[0] - 1), np.round(xd_opt_history[1:, 5], 3), label="wz", lw=2)
+    vel_ax[0].legend(); vel_ax[1].legend()
+
+    # Tracking error
+    tracking_err_fig, tracking_err_ax = plt.subplots(2)
+    tracking_err_fig.suptitle('Positional tracking error')
+    tracking_err_ax[0].plot(range(tracking_err_history.shape[0]-1), np.round(tracking_err_history[1:, 0], 3), label="x", lw=2)
+    tracking_err_ax[0].plot(range(tracking_err_history.shape[0]-1), np.round(tracking_err_history[1:, 1], 3), label="y", lw=2)
+    tracking_err_ax[0].plot(range(tracking_err_history.shape[0]-1), np.round(tracking_err_history[1:, 2], 3), label="z", lw=2)
+    tracking_err_ax[1].plot(range(tracking_err_history.shape[0]-1), np.round(tracking_err_history[1:, 3], 3), label="theta", color='r', lw=2)
+    rms = mean_squared_error(x_traj.t, x_opt_history[:, :3], squared=False)
+    tracking_err_ax[0].text(0.01, 0.0, f"RMSE: {np.round(rms*1000, 3)}mm")
+    rms = np.linalg.norm(tracking_err_history[1:, 3])
+    tracking_err_ax[1].text(0.01, 0.0, f"RMSE: {np.round(rms, 3)}rad")
+    tracking_err_ax[0].legend(); tracking_err_ax[1].legend()
+    tracking_err_ax[0].legend(); tracking_err_ax[1].legend()
+
     plt.show(block=True)
