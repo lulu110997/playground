@@ -11,9 +11,11 @@ class VelocityController():
     CBF constraints.
     """
 
-    def __init__(self, ndim=3, nconst=1, W=None):
+    def __init__(self, ub, lb, ndim=3, nconst=1, W=None):
         """
         Args:
+            ub: ndarray(float) | maximum allowable velocity
+            lb: ndarray(float) | minimum allowable velocity
             ndim: int | number of dimensions we are considering. 2 for xy velocity, 3 for xyz velocity and 6 for xyz
             translational and rotational velocities
             nconst: int | number of inequality constraints
@@ -32,7 +34,10 @@ class VelocityController():
         self.G = cp.Parameter((nconst, ndim))
         self.h = cp.Parameter(nconst)
         self.objective = cp.Minimize(cp.norm((W**0.5)@(self.xd - self.xd_tgt)))
-        self.constraints = [self.G@self.xd - self.h <= 0]
+        self.constraints = [
+            self.G@self.xd - self.h <= 0,
+            self.xd <= ub, lb <= self.xd
+        ]
 
         self.prob = cp.Problem(self.objective, self.constraints)
 
