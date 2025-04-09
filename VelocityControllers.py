@@ -32,13 +32,14 @@ class VelocityController():
         self.xd_prev = cp.Parameter(ndim, value = np.zeros((ndim,)))
 
         # CBF constraints in matrix form
-        self.G = cp.Parameter((nconst, ndim))
+        self.G = cp.Parameter((nconst, ndim), value=np.zeros((nconst, ndim)))
         self.h = cp.Parameter(nconst)
-        self.objective = cp.Minimize(cp.norm((W**0.5)@(self.xd - self.xd_tgt)))
+        self.objective = cp.Minimize(cp.norm((W**0.5)@(self.xd - self.xd_tgt)) )#+ 0.6*cp.norm(self.xd - self.xd_prev))
         self.constraints = [
             self.G@self.xd - self.h <= 0,
             self.xd <= ub, lb <= self.xd
-            ,cp.norm(self.xd - self.xd_prev) <= 0.04
+            # , self.xd - self.xd_prev <= ub, lb <= self.xd - self.xd_prev
+            # ,cp.norm(self.xd - self.xd_prev) <= 0.01
         ]
 
         self.prob = cp.Problem(self.objective, self.constraints)
@@ -48,6 +49,9 @@ class VelocityController():
         return self.xd.value.squeeze()
 
     def set_param(self, xd_tgt, xd_prev, G_matr, h_matr, q=None):
+        """
+        TODO: what q do i use? is it the orientation for ee or for the specific obstacles??
+        """
         self.xd_prev.value = xd_prev
         if self.ndim == 3:
             self.xd_tgt.value = xd_tgt
@@ -63,6 +67,7 @@ class VelocityController():
                     [-q.vec[2], q.vec[1], q.vec[0]],
                 ])
             # quat_d = G_matr[3:] @ Q  # xd,yd,zd,qwd,qxdy,qyd,qzd
-            self.G.value = np.hstack((G_matr[:3], G_matr[3:]@Q)).reshape(self.nconst, self.ndim)  # xd,yd,zd,qwd,qxdy,qyd,qzd
+            for i in range(self.nconst):
+                self.G.value[i] = np.hstack((G_matr[i, :3], G_matr[i, 3:]@Q))  # xd,yd,zd,qwd,qxdy,qyd,qzd
             # h_matr = np.array([h_matr])
-            self.h.value = np.array([h_matr])
+            self.h.value = h_matr
