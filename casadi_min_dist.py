@@ -62,13 +62,19 @@ class MinDist:
         Returns: tuple(np.array, float, np.array, float) | (points on xa, dual value for xa,
                                                             points on xb, dual value for xb)
         """
-        r = self.nlp(x0=x_guess, p=self.params,
-                     lbg=self.G_BOUNDS[0], ubg=self.G_BOUNDS[1],
+        r = self.nlp(x0=x_guess, p=self.params
+                     ,lbg=self.G_BOUNDS[0], ubg=self.G_BOUNDS[1],
                      lbx=self.X_BOUNDS[0], ubx=self.X_BOUNDS[1])
         self.x_opt = r['x'].elements()
         self.nu = r['lam_g'].elements()
         self.obj_val = r['f'].elements()[0]
         return self.x_opt, self.nu
+
+    def get_solver_stats(self):
+        """
+        Get solver stats
+        """
+        return self.nlp.stats()
 
     def get_optimal_value(self):
         """
