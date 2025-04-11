@@ -5,10 +5,10 @@ import matplotlib.pyplot as plt
 import sys
 # print(sys.path)
 sys.path.append("/home/louis/Git/playground")
+from julia import Main
 import numpy as np
 from roboticstoolbox.tools import trajectory
 from spatialmath import SE3, SO3, UnitQuaternion
-from julia import Main
 from VelocityControllers import VelocityController
 from superquadric import SuperquadricObject
 from utils import *
@@ -20,7 +20,10 @@ TEST_NAME = 'test1'
 REPLAY = 0; cwd = f'test cases/{TEST_TYPE}/{TEST_DIR}/{TEST_NAME}_'
 SAVE = 0; sd = f'test cases/{TEST_TYPE}/{TEST_DIR}/{TEST_NAME}_'
 
-with open(f"test cases/{TEST_TYPE}/{TEST_DIR}/{TEST_NAME}.yaml") as file:
+WD = 'compare with tracy'
+SAVE = 0; sd = f'test cases/{WD}/'
+
+with open(f"test cases/{WD}/test.yaml") as file:
     try:
         params = yaml.safe_load(file)
     except yaml.YAMLError as exc:
@@ -67,9 +70,6 @@ if __name__ == '__main__':
     counter = 0
     for row in xb_locs:
         obstacles = [row[:3], row[3:]]  # Store obstacle positions
-        if counter != 7:
-            counter += 1
-            continue
 
         # Create the trajectory
         initial_pose = SE3(xa_init) @ UnitQuaternion(s=qa_init[0], v=qa_init[1:]).SE3()
@@ -173,10 +173,9 @@ if __name__ == '__main__':
         rms1 = np.linalg.norm(tracking_err_history[1:, :3])
         rms2 = np.linalg.norm(tracking_err_history[1:, 3])
         if np.linalg.norm(x_traj[-1].t - x_opt_history[-1][:3]) > 0.01:
-            print(row)
-            print('Did not finish trajectory', rms1, rms2)
+            print('Did not finish trajectory', rms1, rms2, 1000*(cnt/STEPS))
         else:
-            print(rms1, rms2)
+            print(rms1, rms2, 1000*(cnt/STEPS))
         # continue
         if SAVE:
             np.save(sd + 'x_opt_history.npy', x_opt_history)
@@ -185,10 +184,12 @@ if __name__ == '__main__':
             np.save(sd + 'sqb_closest_history.npy', sqb_closest_history)
             np.save(sd + 'optimisation_h_history.npy', optimisation_h_history)
             np.save(sd + 'optimisation_hd_history.npy', optimisation_hd_history)
-            sys.exit()
-        # continue
+            # sys.exit()
+        continue
         s1 = SuperquadricObject(*Ra, *eps_a, pos=xa_init, quat=qa_init)
-        s2 = SuperquadricObject(*Rb, *eps_b, pos=xb_init, quat=qb_init)
+        s2 = []
+        for i in obstacles:
+            s2.append(SuperquadricObject(*Rb, *eps_b, pos=i, quat=qb_init))
 
         plt.figure()
         ax = plt.subplot(111, projection='3d')
@@ -198,7 +199,8 @@ if __name__ == '__main__':
         ax.set_ylim(-0.5, 0.5)
         ax.set_zlim(0.0, 0.55)
         ax.set_aspect('equal')
-        s2.plot_sq(ax, 'red')
+        s2[0].plot_sq(ax, 'red')
+        s2[1].plot_sq(ax, 'red')
         ax.plot(x_opt_history[:, 0], x_opt_history[:, 1], x_opt_history[:, 2], color='blue')
         ax.plot(x_traj.t[:,0], x_traj.t[:,1], x_traj.t[:,2], color='g')
         ax.scatter(x_opt_history[::200, 0], x_opt_history[::200, 1], x_opt_history[::200, 2], color='black', marker='x', linewidths=1.5)

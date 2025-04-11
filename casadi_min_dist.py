@@ -37,8 +37,8 @@ class MinDist:
         # Objective
         self.objective = casadi.norm_2(self.xa - self.xb)
 
-        self.G_BOUNDS = (-2.0, 0.0)  # Bounds for the constraint
-        self.X_BOUNDS = (-2.0, 2.0)  # Bounds for the points
+        self.G_BOUNDS = (-1.0, 0.0)  # Bounds for the constraint
+        self.X_BOUNDS = (-50.0, 50.0)  # Bounds for the points
 
         self.params = None
         self.nlp = None
@@ -54,17 +54,21 @@ class MinDist:
         """
         raise 'Must be setup in the child class'
 
-    def get_primal_dual_solutions(self, x_guess):
+    def get_primal_dual_solutions(self, x_guess, lam_g0):
         """
         Get the points where the minimum distance occurs and the corresponding dual variables
         Args:
             x_guess: bool | Makes it possible to compute gradients of a solution with respect to Parameters
+            lam_g0
+
         Returns: tuple(np.array, float, np.array, float) | (points on xa, dual value for xa,
                                                             points on xb, dual value for xb)
         """
-        r = self.nlp(x0=x_guess, p=self.params
-                     ,lbg=self.G_BOUNDS[0], ubg=self.G_BOUNDS[1],
-                     lbx=self.X_BOUNDS[0], ubx=self.X_BOUNDS[1])
+        r = self.nlp(p=self.params
+                     ,x0=x_guess, lam_g0=lam_g0
+                     ,lbg=self.G_BOUNDS[0], ubg=self.G_BOUNDS[1]
+                     ,lbx=self.X_BOUNDS[0], ubx=self.X_BOUNDS[1]
+                     )
         self.x_opt = r['x'].elements()
         self.nu = r['lam_g'].elements()
         self.obj_val = r['f'].elements()[0]
@@ -166,10 +170,23 @@ class MinDist3D(MinDist):
 
 
         # Define the nlp problem and set the solver
+        # Some docs for warm starting IPOPT
+        # https://github.com/casadi/casadi/wiki/FAQ%3A-Warmstarting-with-IPOPT
+        # https://www.gams.com/latest/docs/S_IPOPT.html#IPOPT_WARMSTART
         nlp = {'x': self.decision_vars, 'f': self.objective, 'g': constraints, 'p': problem_pars}
         self.nlp = casadi.nlpsol('S', 'ipopt', nlp,
-                         {'ipopt':{'linear_solver': 'ma27', "hsllib": "/usr/local/lib/libcoinhsl.so", "sb": 'yes',
-                                   'print_level':0, "mu_strategy":"adaptive"}, "verbose": False,  'print_time':0})
+                         {"verbose": False, 'print_time':0, 'jit': True,
+                          'ipopt':{'linear_solver':'ma27', "hsllib":"/usr/local/lib/libcoinhsl.so", "sb":'yes',
+                                   'print_level':0, 'warm_start_init_point':'yes'
+                                   # ,"mu_strategy":"monotone", "mu_init": 0.0001
+                                   # ,"warm_start_bound_push": 1e-6
+                                   # ,"warm_start_bound_frac": 1e-6
+                                   # ,"warm_start_slack_bound_frac": 1e-6
+                                   # ,"warm_start_slack_bound_push": 1e-6
+                                   # ,"warm_start_mult_bound_push": 1e-6
+                                   # ,"nlp_scaling_method": "none"
+                                   # ,"bound_relax_factor": 1e-7
+                                   }})
 
     def _get_nabla_L(self):
         """
@@ -271,7 +288,7 @@ class MinDist3DTransl(MinDist):
         nlp = {'x': self.decision_vars, 'f': self.objective, 'g': constraints, 'p': problem_pars}
         self.nlp = casadi.nlpsol('S', 'ipopt', nlp,
                          {'ipopt':{'linear_solver': 'ma27', "hsllib": "/usr/local/lib/libcoinhsl.so", "sb": 'yes',
-                                   'print_level':0, "mu_strategy":"adaptive"}, "verbose": False,  'print_time':0})
+                                   'print_level':0, "mu_strategy":"adaptive", "tol":1e-6}, "verbose": False,  'print_time':0})
         self.constraints = [
             ((xa_w + ya_w)**(self.eps_a[1]/self.eps_a[0])) + za_w - 1.0 <= 0,
             ((xb_w + yb_w)**(self.eps_b[1]/self.eps_b[0])) + zb_w - 1.0 <= 0

@@ -18,7 +18,10 @@ TEST_NAME = 'test1'
 REPLAY = 0; cwd = f'test cases/{TEST_TYPE}/{TEST_DIR}/{TEST_NAME}_'
 SAVE = 1; sd = f'test cases/{TEST_TYPE}/{TEST_DIR}/{TEST_NAME}_'
 
-with open(f"test cases/{TEST_TYPE}/{TEST_DIR}/{TEST_NAME}.yaml") as file:
+WD = 'compare with tracy'
+SAVE = 1; sd = f'test cases/{WD}/'
+
+with open(f"test cases/{WD}/test.yaml") as file:
     try:
         params = yaml.safe_load(file)
     except yaml.YAMLError as exc:
@@ -72,9 +75,9 @@ if __name__ == '__main__':
     counter = 0
     for row in xb_locs:
         obstacles = [row[:3], row[3:]]  # Store obstacle positions
-        if counter != 7:
-            counter += 1
-            continue
+        # if counter != 7:
+        #     counter += 1
+        #     continue
 
         # Create the trajectory
         initial_pose = SE3(xa_init) @ UnitQuaternion(s=qa_init[0], v=qa_init[1:]).SE3()
@@ -120,6 +123,7 @@ if __name__ == '__main__':
             xd_prev = np.zeros((ndim,))
             # Control loop
             for idx in range(1, STEPS):
+                acnt = time.time()
 
                 # Change sq parameters in optimiser
                 for calc_idx in range(len(calculators)):
@@ -167,6 +171,7 @@ if __name__ == '__main__':
                 # optimisation_hd_history[idx, :] = G_opt
                 tracking_err_history[idx, :3] = x_error
                 tracking_err_history[idx, 3] = theta
+                cnt += time.time() - acnt
 
             # print(f"{1000*(cnt/STEPS)} ms/iter")
 
@@ -187,8 +192,8 @@ if __name__ == '__main__':
         #     continue
         rms1 = np.linalg.norm(tracking_err_history[1:, :3])
         rms2 = np.linalg.norm(tracking_err_history[1:, 3])
-        print(rms1, rms2)
-
+        print(rms1, rms2, cnt)
+        continue
         s1 = SuperquadricObject(*Ra, *eps_a, pos=xa_init, quat=qa_init)
         s2 = []
         for i in obstacles:
@@ -235,6 +240,13 @@ if __name__ == '__main__':
                 steps_handle.remove()
             s1.set_pose(pos=x_opt_history[idx, :3], quat=tuple(x_opt_history[idx, 3:]))
 
+        plt.pause(0.1)
+        ax.view_init(0, 0 ,0)
+        plt.pause(0.1); input('zy')
+        ax.view_init(0, 90, 0)
+        plt.pause(0.1); input('zx')
+        ax.view_init(90, 90, 0)
+        plt.pause(0.1); input('xy')
         # # Plots
         # # CBF
         # cbf_fig, cbf_ax = plt.subplots()

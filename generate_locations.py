@@ -152,18 +152,17 @@ def rotation_matrix_from_line(p1, p2, up=np.array([0, 0, 1])):
 
 # Save and load paths
 TEST_TYPE = 'compare with tracy'
-TEST_DIR = 'test1'
-TEST_NAME = 'test1'
-REPLAY = 0; cwd = f'test cases/{TEST_TYPE}/{TEST_DIR}/{TEST_NAME}_'
-SAVE = 1; sd = f'test cases/{TEST_TYPE}/{TEST_DIR}/{TEST_NAME}_'
+TEST_NAME = 'test'
+REPLAY = 0; cwd = f'test cases/{TEST_TYPE}/{TEST_NAME}_'
+SAVE = 1; sd = f'test cases/{TEST_TYPE}/{TEST_NAME}_'
 
 # TODO: Define NUM_SIM in yaml? or just as an arg?
-NUM_SIM = 100
+NUM_SIM = 400
 NP_SEED = 9
 
 np.random.seed(NP_SEED)
 
-with open(f"test cases/{TEST_TYPE}/{TEST_DIR}/{TEST_NAME}.yaml") as file:
+with open(f"test cases/{TEST_TYPE}/{TEST_NAME}.yaml") as file:
     try:
         params = yaml.safe_load(file)
     except yaml.YAMLError as exc:
@@ -208,12 +207,15 @@ c2 = [-0.10218479, -0.20750167,  0.25218813]
 size = (0.07, 0.15, 0.35)
 
 for i in range(NUM_SIM):
-    if i == 30:
+    if i == 100:
         c1[1] -= 2*0.055
         c2[1] += 2*0.055
-    if i == 60:
+    if i == 200:
         c1[2] -= 2*0.055
         c2[2] += 2*0.055
+    if i == 300:
+        c1[1] += 2*0.055
+        c2[1] -= 2*0.055
 
     while True:
         # Sample points
@@ -223,7 +225,7 @@ for i in range(NUM_SIM):
         # Check that both shapes have a min dist of 0.05 unit between each other
         calculator = MinDist3D(ca=list(obstacles[0]), cb=list(obstacles[1]), ra=Rb, rb=Rb, eps_a=eps_b, eps_b=eps_b,
                                qa=list(qa_init), qb=list(qb_init))
-        x_star_, lambda_star_ = calculator.get_primal_dual_solutions(c1 + c2)
+        x_star_, lambda_star_ = calculator.get_primal_dual_solutions(c1 + c2, [0, 0])
         dist = calculator.get_optimal_value()
         solved = calculator.get_solver_stats()['success']
         if not solved:
@@ -255,7 +257,7 @@ for i in range(NUM_SIM):
 
     # Append to file (as a single row)
     with open('xb_init.txt', 'a') as f:
-        if i == 32 or i ==62 or i ==10:
+        if i == 1 or i == 101 or i == 201 or i == 301:
             fig = plt.figure()
             ax = fig.add_subplot(111, projection='3d')
             s1 = SuperquadricObject(*Rb, *eps_b, pos=obstacles[0], quat=qb_init)
