@@ -133,3 +133,28 @@ class SuperquadricObject:
             Z[i, j] = xp[2]
 
         return X, Y, Z
+
+    def get_poi(self, x0, y0, z0, scale=1):
+        """
+        Calculate the point of intersection of a line that connects the centre of sq to the point
+        Args:
+            x0, y0, z0: Point in the world frame
+            scale: used to move the point along the line
+        """
+        xyz_w = np.array([x0, y0, z0])
+
+        # Transform point from world to local
+        x_local = self.quat.rotation_matrix.transpose() @ (xyz_w.reshape(3,1) - self.pos).reshape(3,1)
+
+        # Obtain inside-outside function value
+        x = (np.abs(x_local[0])/ self.a) ** (2 / self.eps2)
+        y = (np.abs(x_local[1])/ self.b) ** (2 / self.eps2)
+        z = (np.abs(x_local[2])/ self.c) ** (2 / self.eps1)
+        F = ((x + y) ** (self.eps2 / self.eps1)) + z
+
+        # Scale point
+        beta = F**(-self.eps1 / 2)
+        poi = beta*x_local*scale
+
+        # Return point in world frame
+        return (self.quat.rotation_matrix @ poi.reshape(3,1) + self.pos.reshape(3,1)).flatten()

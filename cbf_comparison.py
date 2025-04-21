@@ -14,23 +14,38 @@ import numpy as np
 import os
 from roboticstoolbox.tools import trajectory
 from spatialmath import SE3
-
-if JULIA is True:
-    from julia import Main
-else:
-    from casadi_min_dist import MinDist3D
-from VelocityControllers import VelocityController
-from utils import *
+import pandas as pd
+from tqdm import tqdm
 
 WD = 'compare with tracy'
 SAVE = 0; sd = f'test cases/{WD}/'
+
+if JULIA is True:
+    from julia import Main
+    csv_file = f"test cases/{WD}/julia_results.csv"
+else:
+    from casadi_min_dist import MinDist3D
+    # Some docs for warm starting IPOPT
+    # https://github.com/casadi/casadi/wiki/FAQ%3A-Warmstarting-with-IPOPT
+    # https://www.gams.com/latest/docs/S_IPOPT.html#IPOPT_WARMSTART
+    ipopt_options = {"linear_solver":"ma27", "hsllib":"/usr/local/lib/libcoinhsl.so", "sb":"yes", "print_level":0,
+                     "tol": 1e-6 , "warm_start_init_point":"yes" , "warm_start_bound_push": 1e-9,
+                     "warm_start_mult_bound_push": 1e-9 , "mu_strategy": "monotone", "mu_init": 1e-9,
+                     "bound_relax_factor": 1e-9 , "warm_start_bound_frac": 1e-9 , "warm_start_slack_bound_frac": 1e-9,
+                     "warm_start_slack_bound_push": 1e-9}
+    csv_file = f"test cases/{WD}/python_results.csv"
+
+df = pd.read_csv(csv_file)
+header_df = pd.DataFrame(columns=['idx', 'avg pos error (mm)', 'avg ori error (rad)', 'average control rate', 'finished'])
+header_df.to_csv(csv_file, index=False)
+from VelocityControllers import VelocityController
+from utils import *
 
 with open(f"test cases/{WD}/test.yaml") as file:
     try:
         params = yaml.safe_load(file)
     except yaml.YAMLError as exc:
         print(exc)
-
 
 NDIM = 6
 
@@ -69,7 +84,7 @@ TIME_SCALE = params['TIME_SCALE']
 if __name__ == '__main__':
     xb_locs = np.loadtxt('xb_init.txt')
     counter = 0
-    for row in xb_locs:
+    for row in tqdm(xb_locs):
         obstacles = [row[:3], row[3:]]  # Store obstacle positions
 
         # Create the trajectory
@@ -140,7 +155,7 @@ if __name__ == '__main__':
                     x_star[o], lambda_star[o] = calculators[o].get_primal_dual_solutions(x_star[o], lambda_star[o])
                     h_opt[o] = GAMMA * calculators[o].get_optimal_value()
                     G_opt[o] = -np.array(calculators[o].sensitivity_analysis())
-            vel_cont.set_param(vel, xd_prev, G_opt, h_opt, UnitQuaternion(qb_init))  # TODO: change this to be the orientation of the specific obstacle
+            vel_cont.set_param(vel, xd_prev, G_opt, h_opt, UnitQuaternion(qa_curr))  # TODO: change this to be the orientation of the specific obstacle
             xd_opt_des = vel_cont.get_solution()
             xd_prev = xd_opt_des
 
@@ -165,18 +180,21 @@ if __name__ == '__main__':
             tracking_err_history[idx, 1] = theta
             toc += time.time() - tic
 
-        # print(f"{1000*(toc/STEPS)} ms/iter")
-        total_pos_err = np.mean(tracking_err_history[1:, 0])
-        total_ori_err = np.mean(tracking_err_history[1:, 1])
+        avg_pos_err = np.mean(tracking_err_history[1:, 0])
+        avg_ori_err = np.mean(tracking_err_history[1:, 1])
 
         if np.linalg.norm(x_traj[-1].t - x_opt_history[-1][:3]) > 1e-3 or theta > 1e-3:
             finished = 0
         else:
             finished = 1
-
-        print(counter, total_pos_err*1000, total_ori_err, (toc/STEPS)*1000, finished)
+        print((toc/STEPS)*1000)
+        df_values = (counter, avg_pos_err*1000, avg_ori_err, (toc/STEPS)*1000, finished)
+        new_row = pd.DataFrame([{'idx': df_values[0], 'average pos error (mm)': df_values[1],
+                                 'average ori error (rad)': df_values[2], 'average control rate': df_values[3],
+                                 'finished': df_values[4]}])
 
         if SAVE:
+            new_row.to_csv(csv_file, mode='a', header=False, index=False)
             sp = f'{sd}/RUN{counter}_JULIA{int(JULIA)}/'
             os.makedirs(sp, exist_ok=True)
             np.save(sp + f'x_opt_history_{counter}.npy', x_opt_history)
