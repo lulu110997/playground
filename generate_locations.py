@@ -1,6 +1,6 @@
 import math
 import sys
-
+from tqdm import tqdm
 import numpy as np
 import yaml
 from roboticstoolbox.tools import trajectory
@@ -10,17 +10,47 @@ from superquadric import SuperquadricObject
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Line3DCollection, Poly3DCollection
 
+def point_to_segment_distance(point, seg_start, seg_end):
+    """
+    Computes the shortest distance from a point to a line segment in 3D.
+
+    Args:
+        point: array-like | coordinates of the point
+        seg_start: array-like | coordinates of the start of the segment
+        seg_end: array-like | coordinates of the end of the segment
+
+    Returns:
+        distance: float | shortest distance from point to segment
+    """
+    p = np.array(point)
+    a = np.array(seg_start)
+    b = np.array(seg_end)
+    ab = b - a
+    ap = p - a
+
+    # Project point p onto the line defined by a–b
+    t = np.dot(ap, ab) / np.dot(ab, ab)
+    t_clamped = np.clip(t, 0, 1)  # Clamp t to [0, 1] to stay on the segment
+
+    # Find the closest point on the segment
+    closest_point = a + t_clamped * ab
+
+    # Distance from point to closest point
+    distance = np.linalg.norm(p - closest_point)
+
+    return distance
+
 def sample_point_from_rotated_box(center, size, rotation_matrix):
     """
     Samples a random point from within a rotated 3D bounding box.
 
     Parameters:
-    - center: (3,) array-like, the center of the bounding box
-    - size: (3,) array-like, the box size along each axis (length, width, height)
-    - rotation_matrix: (3, 3) numpy array, rotation to apply to the box
+    center: array-like | the center of the bounding box
+    size: array-like | the box size along each axis (length, width, height)
+    rotation_matrix: numpy array | rotation to apply to the box
 
     Returns:
-    - A sampled 3D point inside the rotated bounding box
+        A sampled 3D point inside the rotated bounding box
     """
     center = np.array(center)
     size = np.array(size)
@@ -34,18 +64,17 @@ def sample_point_from_rotated_box(center, size, rotation_matrix):
 
     return world_point
 
-
 def draw_rotated_bounding_box(center, size, rotation_matrix, ax=None, color='blue', face_alpha=0.1):
     """
     Draws a rotated 3D bounding box with transparent faces using matplotlib.
 
-    Parameters:
-    - center: (3,) array-like, center of the box
-    - size: (3,) array-like, box dimensions (length, width, height)
-    - rotation_matrix: (3, 3) numpy array, rotation matrix
-    - ax: optional matplotlib 3D axes to plot on
-    - color: color of the bounding box
-    - face_alpha: transparency of the faces (0 = fully transparent, 1 = opaque)
+    Args:
+        center: array-like | center of the box
+        size: array-like | box dimensions (length, width, height)
+        rotation_matrix: numpy array | rotation matrix
+        ax: optional matplotlib 3D axes to plot on
+        color: color of the bounding box
+        face_alpha: transparency of the faces (0 = fully transparent, 1 = opaque)
     """
     center = np.array(center)
     size = np.array(size)
@@ -111,20 +140,16 @@ def draw_rotated_bounding_box(center, size, rotation_matrix, ax=None, color='blu
 
     # plt.show()
 
-
 def rotation_matrix_from_line(p1, p2, up=np.array([0, 0, 1])):
     """
     Computes a rotation matrix that aligns the Z-axis to the vector from p1 to p2.
 
-    Parameters:
-    - p1, p2: 3D points defining the line segment.
-    - up: the preferred 'up' direction (used to define the full orientation).
+    Args:
+        p1, p2: 3D points defining the line segment.
+        up: the preferred 'up' direction (used to define the full orientation).
 
     Returns:
-    - A 3x3 rotation matrix where:
-        - column 0 is the X-axis,
-        - column 1 is the Y-axis,
-        - column 2 is the Z-axis (aligned with p2 - p1).
+        A 3x3 rotation matrix
     """
     p1 = np.array(p1, dtype=np.float64)
     p2 = np.array(p2, dtype=np.float64)
@@ -150,15 +175,21 @@ def rotation_matrix_from_line(p1, p2, up=np.array([0, 0, 1])):
     return R
 
 
+# TODO: Define NUM_SIM in yaml? or just as an arg?
+NUM_SIM = 1000
+NP_SEED = 9
+PLOT = 0
+SAVE = 0
+TRAJ_D = 0.05  # Min dist of obstacle centre from traj
+SQ_D = 0.2  # Min dist between the two obstacles
+
+# Define bb centre and size
+c1 = [-0.32333222, -0.01641094, 0.256154105]
+size = (0.25, 0.2, 1.0)  # y, z, x
+
 # Save and load paths
 TEST_TYPE = 'compare with tracy'
 TEST_NAME = 'test'
-REPLAY = 0; cwd = f'test cases/{TEST_TYPE}/{TEST_NAME}_'
-SAVE = 1; sd = f'test cases/{TEST_TYPE}/{TEST_NAME}_'
-
-# TODO: Define NUM_SIM in yaml? or just as an arg?
-NUM_SIM = 400
-NP_SEED = 9
 
 np.random.seed(NP_SEED)
 
@@ -168,22 +199,13 @@ with open(f"test cases/{TEST_TYPE}/{TEST_NAME}.yaml") as file:
     except yaml.YAMLError as exc:
         print(exc)
 
-# Define lower and upper bounds
-lower_bounds1 = np.array([-0.74798409,  0.08765844,  0.10815752])  # 440
-upper_bounds1 = np.array([-0.49244496,  0.30491329,  0.21712809])  # 650
-
-lower_bounds2 = np.array([-0.55439293, -0.3062642,  0.23514009])
-upper_bounds2 = np.array([ 0.311791851, 0.08765844,  0.35798119])
-
-# Superquadric parameters
-Rb = params['Rb']
-eps_b = params['eps_b']
-
-# TODO: Some comment
+# Parameters
+Rb = params['Rb']  # Obstacle radii
+eps_b = params['eps_b']  # Obstacle epsilon value
 xa_init = params['xa_init']  # Initial robot position
-qa_init = params['qa_init']  # Initial robot position
+qa_init = params['qa_init']  # Initial robot orientation
 xa_tgt = params['xa_tgt']  # Final robot position
-qa_tgt = params['qa_tgt']  # Final robot position
+qa_tgt = params['qa_tgt']  # Final robot orientation
 qb_init = params['qb_init']
 FREQ = params['FREQ']
 TIME = params['TIME']
@@ -196,68 +218,19 @@ final_pose = SE3(xa_tgt) @ UnitQuaternion(s=qa_tgt[0], v=qa_tgt[1:]).SE3()
 x_traj = trajectory.ctraj(initial_pose, final_pose, STEPS)
 x_traj_line_rot = rotation_matrix_from_line(x_traj[0].t, x_traj[-1].t)
 
-# print(np.linalg.norm(x_traj[1040].t - x_traj[-1].t)); sys.exit()
-# c1 = x_traj[600].t; c1[1] += 0.055; c1[2] += 0.055
-# c2 = x_traj[940].t; c2[1] -= 0.055; c2[2] -= 0.055
-# print(c1, c2); sys.exit()
-
-# Define bb centre and size
-c1 = [-0.54447965,  0.17467979,  0.26012008]
-c2 = [-0.10218479, -0.20750167,  0.25218813]
-size = (0.07, 0.15, 0.35)
-
-for i in range(NUM_SIM):
-    if i == 100:
-        c1[1] -= 2*0.055
-        c2[1] += 2*0.055
-    if i == 200:
-        c1[2] -= 2*0.055
-        c2[2] += 2*0.055
-    if i == 300:
-        c1[1] += 2*0.055
-        c2[1] -= 2*0.055
-
+for i in tqdm(range(NUM_SIM)):
     while True:
         # Sample points
         obstacles = [sample_point_from_rotated_box(c1, size, x_traj_line_rot),
-                     sample_point_from_rotated_box(c2, size, x_traj_line_rot)]
+                     sample_point_from_rotated_box(c1, size, x_traj_line_rot)]
 
-        # Check that both shapes have a min dist of 0.05 unit between each other
         calculator = MinDist3D(ca=list(obstacles[0]), cb=list(obstacles[1]), ra=Rb, rb=Rb, eps_a=eps_b, eps_b=eps_b,
                                qa=list(qa_init), qb=list(qb_init))
-        x_star_, lambda_star_ = calculator.get_primal_dual_solutions(c1 + c2, [0, 0])
+        x_star_, lambda_star_ = calculator.get_primal_dual_solutions(list(obstacles[0]) + list(obstacles[1]), [0, 0])
         dist = calculator.get_optimal_value()
         solved = calculator.get_solver_stats()['success']
-        if not solved:
-            # Solution was not found, might be due to bad initial guess
-            print(c1, c2)
-            continue
-        if dist < 0.2:
-            # fig = plt.figure()
-            # ax = fig.add_subplot(111, projection='3d')
-            # s1 = SuperquadricObject(*Rb, *eps_b, pos=obstacles[0], quat=qb_init)
-            # s1_handle = s1.plot_sq(ax, 'red')
-            # s2 = SuperquadricObject(*Rb, *eps_b, pos=obstacles[1], quat=qb_init)
-            # s2_handle = s2.plot_sq(ax, 'red')
-            # ax.plot(x_traj.t[:, 0], x_traj.t[:, 1], x_traj.t[:, 2], color='g')
-            # draw_rotated_bounding_box(c1, size, x_traj_line_rot, ax)
-            # draw_rotated_bounding_box(c2, size, x_traj_line_rot, ax)
-            # line_handle = ax.plot((x_star_[0], x_star_[3]),
-            #                       (x_star_[1], x_star_[4]),
-            #                       (x_star_[2], x_star_[5]), 'ro-')
-            # ax.view_init(83, 144, 0)
-            # ax.set_xlim(-1.0, 0.2)
-            # ax.set_ylim(-0.5, 0.5)
-            # ax.set_zlim(0.0, 0.55)
-            # plt.show()
-            continue
 
-
-        break
-
-    # Append to file (as a single row)
-    with open('xb_init.txt', 'a') as f:
-        if i == 1 or i == 101 or i == 201 or i == 301:
+        if PLOT:
             fig = plt.figure()
             ax = fig.add_subplot(111, projection='3d')
             s1 = SuperquadricObject(*Rb, *eps_b, pos=obstacles[0], quat=qb_init)
@@ -266,11 +239,26 @@ for i in range(NUM_SIM):
             s2_handle = s2.plot_sq(ax, 'red')
             ax.plot(x_traj.t[:, 0], x_traj.t[:, 1], x_traj.t[:, 2], color='g')
             draw_rotated_bounding_box(c1, size, x_traj_line_rot, ax)
-            draw_rotated_bounding_box(c2, size, x_traj_line_rot, ax)
-            ax.view_init(50, -179, 0)
+            line_handle = ax.plot((x_star_[0], x_star_[3]),
+                                  (x_star_[1], x_star_[4]),
+                                  (x_star_[2], x_star_[5]), 'ro-')
+            ax.view_init(83, 144, 0)
             ax.set_xlim(-1.0, 0.2)
             ax.set_ylim(-0.5, 0.5)
             ax.set_zlim(0.0, 0.55)
             plt.show()
-        combined = np.concatenate([obstacles[0], obstacles[1]]).reshape(1, -1)
-        np.savetxt(f, combined)
+
+        # Ensure the point centre of SQ is some distance away from the obstacle and check that both shapes have a min
+        # dist of 0.05 unit between each other
+        # Distance between the two is too small OR Solution was not found, might be due to bad initial guess OR offset
+        # the centre of one/both of the obstacle does not satisfy the minimum distance from the trajectory
+        if max(point_to_segment_distance(obstacles[0], xa_init, xa_tgt),
+               point_to_segment_distance(obstacles[1], xa_init, xa_tgt)) < TRAJ_D or dist < SQ_D or not solved:
+            continue
+        break
+
+    # Append to file (as a single row)
+    if SAVE:
+        with open('xb_init.txt', 'a') as f:
+            combined = np.concatenate([obstacles[0], obstacles[1]]).reshape(1, -1)
+            np.savetxt(f, combined)

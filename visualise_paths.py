@@ -1,3 +1,5 @@
+import sys
+
 import matplotlib
 import numpy as np
 import yaml
@@ -7,11 +9,10 @@ from roboticstoolbox.tools import trajectory
 from spatialmath import SE3, SO3, UnitQuaternion
 from superquadric import SuperquadricObject
 
-RUN = 339
-
+RUN = 823
 YAML_PATH = '/home/louis/Git/playground/test cases/compare with tracy/test.yaml'
-JULIA_FILES = f'/home/louis/Git/playground/test cases/compare with tracy/RUN339_JULIA{0}/'
-PYTHON_FILES = f'/home/louis/Git/playground/test cases/compare with tracy/RUN339_JULIA{1}/'
+JULIA_FILES = f'/home/louis/Git/playground/test cases/compare with tracy/RUN{RUN}_JULIA1/'
+PYTHON_FILES = f'/home/louis/Git/playground/test cases/compare with tracy/RUN{RUN}_JULIA0/'
 
 with open(YAML_PATH) as file:
     try:
@@ -97,6 +98,10 @@ vh = (ax.quiver(x_opt_history_j[0, 0], x_opt_history_j[0, 1], x_opt_history_j[0,
                 xd_opt_history_p[0, 0], xd_opt_history_p[0, 1], xd_opt_history_p[0, 2], color="black"))
 traj_handle = ax.scatter(x_traj[0].t[0], x_traj[0].t[1], x_traj[0].t[2], color='g', marker='o', linewidth=2)
 steps_handle = ax.text2D(0.05, 0.95, f"Step #{0}", transform=ax.transAxes)
+ax.scatter(x_opt_history_p[::200, 0], x_opt_history_p[::200, 1], x_opt_history_p[::200, 2], color='black', marker='x',
+           linewidths=1.5)
+ax.scatter(x_opt_history_j[::200, 0], x_opt_history_j[::200, 1], x_opt_history_j[::200, 2], color='blue', marker='x',
+           linewidths=1.5)
 
 def simulate(idx):
     """
@@ -133,95 +138,50 @@ def simulate(idx):
 
     return ax,
 
-ani = animation.FuncAnimation(fig=fig, func=simulate,
-                              frames=range(SIM_START, SIM_END, int(TIME*TIME_SCALE)), repeat=False)
-plt.close(); ani.save('A.mp4',fps=30, bitrate=-1)
+# ani = animation.FuncAnimation(fig=fig, func=simulate,
+#                               frames=range(SIM_START, SIM_END, int(TIME*TIME_SCALE)), repeat=False)
+# plt.close(); ani.save('A.mp4',fps=30, bitrate=-1); sys.exit()
 # for i in range(0, STEPS, int(TIME*TIME_SCALE)):
-#     simulate(i)
+    # simulate(i)
 
-#
+#  TODO: plot h, hd, v, omega, error, position
 # s1 = SuperquadricObject(*Ra, *eps_a, pos=xa_init, quat=qa_init)
 # s2 = []
-# for i in obstacles:
+# for i in obstacles:blue
 #     s2.append(SuperquadricObject(*Rb, *eps_b, pos=i, quat=qb_init))
 
-# plt.figure()
-# ax = plt.subplot(111, projection='3d')
-# ax.set_xlabel('x-axis')
-# ax.set_ylabel('y-axis')
-# ax.set_xlim(-1.0, 0.2)
-# ax.set_ylim(-0.5, 0.5)
-# ax.set_zlim(0.0, 0.55)
-# ax.set_aspect('equal')
-# s2[0].plot_sq(ax, 'red')
-# s2[1].plot_sq(ax, 'red')
-# ax.plot(x_opt_history[:, 0], x_opt_history[:, 1], x_opt_history[:, 2], color='blue')
-# ax.plot(x_traj.t[:,0], x_traj.t[:,1], x_traj.t[:,2], color='g')
-# ax.scatter(x_opt_history[::200, 0], x_opt_history[::200, 1], x_opt_history[::200, 2], color='black', marker='x', linewidths=1.5)
-# ax.view_init(10, -60 ,0)
+optimisation_h_history_p = np.load(PYTHON_FILES + f'optimisation_h_history_{RUN}.npy')
+optimisation_hd_history_p = np.load(PYTHON_FILES + f'optimisation_hd_history_{RUN}.npy')
 
-# for idx in range(SIM_START, SIM_END, int(TIME*TIME_SCALE)):
-#     s1_handle = s1.plot_sq(ax, 'green')
-#     traj_handle = ax.scatter(x_traj[idx].t[0], x_traj[idx].t[1], x_traj[idx].t[2], color='g', marker='o', linewidth=2)
-#     curr_pos_handle = ax.scatter(x_opt_history[idx, 0], x_opt_history[idx, 1], x_opt_history[idx, 2], color='blue', marker='o', alpha=0.5)
-#     vel_handle = ax.quiver(x_opt_history[idx, 0], x_opt_history[idx, 1], x_opt_history[idx, 2],
-#                            xd_opt_history[idx, 0], xd_opt_history[idx, 1], xd_opt_history[idx, 2])
-#     line_handle = ax.plot((sqa_closest_history[idx, 0], sqb_closest_history[idx, 0]),
-#                           (sqa_closest_history[idx, 1], sqb_closest_history[idx, 1]),
-#                           (sqa_closest_history[idx, 2], sqb_closest_history[idx, 2]), 'ro-')
-#     steps_handle = ax.text2D(0.05, 0.95, f"Step #{idx}", transform=ax.transAxes)
-#
-#     if plt.isinteractive():
-#         while not plt.waitforbuttonpress():
-#             plt.pause(1e-16)
-#     else:
-#         plt.pause(1e-16)
-#
-#     if idx < SIM_END-1-int(TIME*TIME_SCALE):
-#         s1_handle.remove()
-#         traj_handle.remove()
-#         curr_pos_handle.remove()
-#         vel_handle.remove()
-#         line_handle[0].remove()
-#         steps_handle.remove()
-#     s1.set_pose(pos=x_opt_history[idx, :3], quat=tuple(x_opt_history[idx, 3:]))
-#
-# plt.pause(0.1)
-# ax.view_init(0, 0 ,0)
-# plt.pause(0.1); input('zy')
-# ax.view_init(0, 90, 0)
-# plt.pause(0.1); input('zx')
-# ax.view_init(90, 90, 0)
-# plt.pause(0.1); input('xy')
-# # Plots
-# # CBF
-# cbf_fig, cbf_ax = plt.subplots()
-# cbf_fig.suptitle('h value')
-# cbf_ax.plot(range(optimisation_h_history.shape[0]-1), np.round(optimisation_h_history[1:, 0], 3), label="CBF value", color='r', lw=2)
-# cbf_ax.legend()
-#
-# # CBF derivative
+# Plots
+# CBF
+cbf_fig, cbf_ax = plt.subplots()
+cbf_fig.suptitle('h value')
+cbf_ax.plot(range(optimisation_h_history_p.shape[0]-1), np.round(optimisation_h_history_p[1:, 0], 3), label="CBF value", color='r', lw=2)
+cbf_ax.legend()
+
+# CBF derivative
 # cbfd_fig, cbfd_ax = plt.subplots(2)
 # cbfd_fig.suptitle('hd values')
-# cbfd_ax[0].plot(range(optimisation_hd_history.shape[0]-1), np.round(optimisation_hd_history[1:, 0], 3), label="optimisation x grad", lw=2)
-# cbfd_ax[0].plot(range(optimisation_hd_history.shape[0]-1), np.round(optimisation_hd_history[1:, 1], 3), label="optimisation y grad", lw=2)
-# cbfd_ax[0].plot(range(optimisation_hd_history.shape[0]-1), np.round(optimisation_hd_history[1:, 2], 3), label="optimisation z grad", lw=2)
-# cbfd_ax[1].plot(range(optimisation_hd_history.shape[0]-1), np.round(optimisation_hd_history[1:, 3], 3), label="optimisation qw grad", lw=2)
-# cbfd_ax[1].plot(range(optimisation_hd_history.shape[0]-1), np.round(optimisation_hd_history[1:, 4], 3), label="optimisation qx grad", lw=2)
-# cbfd_ax[1].plot(range(optimisation_hd_history.shape[0]-1), np.round(optimisation_hd_history[1:, 5], 3), label="optimisation qy grad", lw=2)
-# cbfd_ax[1].plot(range(optimisation_hd_history.shape[0]-1), np.round(optimisation_hd_history[1:, 6], 3), label="optimisation qz grad", lw=2)
+# cbfd_ax[0].plot(range(optimisation_hd_history_p.shape[0]-1), np.round(optimisation_hd_history_p[1:, 0], 3), label="optimisation x grad", lw=2)
+# cbfd_ax[0].plot(range(optimisation_hd_history_p.shape[0]-1), np.round(optimisation_hd_history_p[1:, 1], 3), label="optimisation y grad", lw=2)
+# cbfd_ax[0].plot(range(optimisation_hd_history_p.shape[0]-1), np.round(optimisation_hd_history_p[1:, 2], 3), label="optimisation z grad", lw=2)
+# cbfd_ax[1].plot(range(optimisation_hd_history_p.shape[0]-1), np.round(optimisation_hd_history_p[1:, 3], 3), label="optimisation qw grad", lw=2)
+# cbfd_ax[1].plot(range(optimisation_hd_history_p.shape[0]-1), np.round(optimisation_hd_history_p[1:, 4], 3), label="optimisation qx grad", lw=2)
+# cbfd_ax[1].plot(range(optimisation_hd_history_p.shape[0]-1), np.round(optimisation_hd_history_p[1:, 5], 3), label="optimisation qy grad", lw=2)
+# cbfd_ax[1].plot(range(optimisation_hd_history_p.shape[0]-1), np.round(optimisation_hd_history_p[1:, 6], 3), label="optimisation qz grad", lw=2)
 # cbfd_ax[0].legend(); cbfd_ax[1].legend()
-#
-# # Velocities
-# vel_fig, vel_ax = plt.subplots(2)
-# vel_fig.suptitle('Velocities')
-# vel_ax[0].plot(range(xd_opt_history.shape[0] - 1), np.round(xd_opt_history[1:, 0], 3), label="vx", lw=2)
-# vel_ax[0].plot(range(xd_opt_history.shape[0] - 1), np.round(xd_opt_history[1:, 1], 3), label="vy", lw=2)
-# vel_ax[0].plot(range(xd_opt_history.shape[0] - 1), np.round(xd_opt_history[1:, 2], 3), label="vz", lw=2)
-# vel_ax[1].plot(range(xd_opt_history.shape[0] - 1), np.round(xd_opt_history[1:, 3], 3), label="wx", lw=2)
-# vel_ax[1].plot(range(xd_opt_history.shape[0] - 1), np.round(xd_opt_history[1:, 4], 3), label="wy", lw=2)
-# vel_ax[1].plot(range(xd_opt_history.shape[0] - 1), np.round(xd_opt_history[1:, 5], 3), label="wz", lw=2)
-# vel_ax[0].legend(); vel_ax[1].legend()
+
+# Velocities
+vel_fig, vel_ax = plt.subplots(2)
+vel_fig.suptitle('Velocities')
+vel_ax[0].plot(range(xd_opt_history_p.shape[0] - 1), np.round(xd_opt_history_p[1:, 0], 3), label="vx", lw=2)
+vel_ax[0].plot(range(xd_opt_history_p.shape[0] - 1), np.round(xd_opt_history_p[1:, 1], 3), label="vy", lw=2)
+vel_ax[0].plot(range(xd_opt_history_p.shape[0] - 1), np.round(xd_opt_history_p[1:, 2], 3), label="vz", lw=2)
+vel_ax[1].plot(range(xd_opt_history_p.shape[0] - 1), np.round(xd_opt_history_p[1:, 3], 3), label="wx", lw=2)
+vel_ax[1].plot(range(xd_opt_history_p.shape[0] - 1), np.round(xd_opt_history_p[1:, 4], 3), label="wy", lw=2)
+vel_ax[1].plot(range(xd_opt_history_p.shape[0] - 1), np.round(xd_opt_history_p[1:, 5], 3), label="wz", lw=2)
+vel_ax[0].legend(); vel_ax[1].legend()
 #
 # # Tracking error
 # tracking_err_fig, tracking_err_ax = plt.subplots(2)
@@ -236,4 +196,4 @@ plt.close(); ani.save('A.mp4',fps=30, bitrate=-1)
 # tracking_err_ax[1].text(0.01, 0.0, f"RMSE: {np.round(rms, 3)}rad")
 # tracking_err_ax[0].legend(); tracking_err_ax[1].legend()
 
-# plt.show(block=True)
+plt.show(block=True)
