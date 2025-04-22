@@ -64,12 +64,12 @@ class MinDist:
         """
         raise "Must be setup in the child class"
 
-    def get_primal_dual_solutions(self, x_guess, lam_g0):
+    def get_primal_dual_solutions(self, x_guess, lam_g0=False):
         """
         Get the points where the minimum distance occurs and the corresponding dual variables
         Args:
-            x_guess: bool | Makes it possible to compute gradients of a solution with respect to Parameters
-            lam_g0
+            x_guess: List[Float] | initial guess for the optimal solution
+            lam_g0 bool or list | initial guess for the dual variables. Defaults to False if no guess is provided
 
         Returns: tuple(np.array, float, np.array, float) | (points on xa, dual value for xa,
                                                             points on xb, dual value for xb)
@@ -166,12 +166,12 @@ class MinDist3D(MinDist):
         # Inside-outside function in the world frame as the constraint
         # Change abs(x) to sqrt(x**2 + eps) to improve Hessian calculation (less NaNs)
         # The eps value is used to smooth out the derivatives
-        xa_w = (casadi.sqrt(xrot_a**2 + 1e-1) / self.ra[0]) ** (2 / self.eps_a[1])
-        ya_w = (casadi.sqrt(yrot_a**2 + 1e-1) / self.ra[1]) ** (2 / self.eps_a[1])
-        za_w = (casadi.sqrt(zrot_a**2 + 1e-1) / self.ra[2]) ** (2 / self.eps_a[0])
-        xb_w = (casadi.sqrt(xrot_b**2 + 1e-1) / self.rb[0]) ** (2 / self.eps_b[1])
-        yb_w = (casadi.sqrt(yrot_b**2 + 1e-1) / self.rb[1]) ** (2 / self.eps_b[1])
-        zb_w = (casadi.sqrt(zrot_b**2 + 1e-1) / self.rb[2]) ** (2 / self.eps_b[0])
+        xa_w = (casadi.sqrt(xrot_a**2 + 1e-2) / self.ra[0]) ** (2 / self.eps_a[1])
+        ya_w = (casadi.sqrt(yrot_a**2 + 1e-2) / self.ra[1]) ** (2 / self.eps_a[1])
+        za_w = (casadi.sqrt(zrot_a**2 + 1e-2) / self.ra[2]) ** (2 / self.eps_a[0])
+        xb_w = (casadi.sqrt(xrot_b**2 + 1e-2) / self.rb[0]) ** (2 / self.eps_b[1])
+        yb_w = (casadi.sqrt(yrot_b**2 + 1e-2) / self.rb[1]) ** (2 / self.eps_b[1])
+        zb_w = (casadi.sqrt(zrot_b**2 + 1e-2) / self.rb[2]) ** (2 / self.eps_b[0])
 
         # Concatenate constraints into a vector
         c1 = casadi.cse(((xa_w + ya_w) ** (self.eps_a[1] / self.eps_a[0])) + za_w - 1)
