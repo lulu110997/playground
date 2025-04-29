@@ -1,24 +1,25 @@
-import sys
+import numpy as np
 import argparse
+import time
+from contextlib import contextmanager
+import yaml
+import os
+from roboticstoolbox.tools import trajectory
+from spatialmath import SE3
+import pandas as pd
+from tqdm import tqdm
+import sys; sys.path.append("/home/louis/Git/playground")  # Needed for when python-jl is used to run this script
+from VelocityControllers import VelocityController
+from utils import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--JULIA', action='store_true')
 parser.set_defaults(JULIA=False)
 args = parser.parse_args()
 JULIA = args.JULIA
-sys.path.append("/home/louis/Git/playground")  # Needed for when python-jl is used to run this script
-
-import time
-import yaml
-import numpy as np
-import os
-from roboticstoolbox.tools import trajectory
-from spatialmath import SE3
-import pandas as pd
-from tqdm import tqdm
 
 WD = 'compare with tracy'
-SAVE = 0; sd = f'test cases/{WD}/'
+SAVE = 1; sd = f'test cases/{WD}/'
 
 if JULIA is True:
     from julia import Main
@@ -28,22 +29,37 @@ else:
     # Some docs for warm starting IPOPT
     # https://github.com/casadi/casadi/wiki/FAQ%3A-Warmstarting-with-IPOPT
     # https://www.gams.com/latest/docs/S_IPOPT.html#IPOPT_WARMSTART
-    ipopt_options = {"linear_solver":"ma27", "hsllib":"/usr/local/lib/libcoinhsl.so", "sb":"yes", "print_level":0,
-                     "tol": 1e-6 , "warm_start_init_point":"yes" , "warm_start_bound_push": 1e-9,
-                     "warm_start_mult_bound_push": 1e-9 , "mu_strategy": "monotone", "mu_init": 1e-9,
-                     "bound_relax_factor": 1e-9 , "warm_start_bound_frac": 1e-9 , "warm_start_slack_bound_frac": 1e-9,
-                     "warm_start_slack_bound_push": 1e-9}
+    SOLVER = "snopt"
+    if SOLVER == "ipopt":
+        solver_options = {"linear_solver":"ma27", "sb":"yes", "print_level":0,
+                         "tol": 1e-6 , "warm_start_init_point":"yes" , "warm_start_bound_push": 1e-9,
+                         "warm_start_mult_bound_push": 1e-9 , "mu_strategy": "monotone", "mu_init": 1e-9,
+                         "bound_relax_factor": 1e-9 , "warm_start_bound_frac": 1e-9 , "warm_start_slack_bound_frac": 1e-9,
+                         "warm_start_slack_bound_push": 1e-9}
+    elif SOLVER == "snopt":
+        os.environ["SNOPT_LICENSE"] = "/home/louis/licenses/snopt7.lic"
+        solver_options = {
+            'Warm start': "True",
+            "Major feasibility tolerance": 1e-6,
+            "Major optimality tolerance": 1e-6,
+            'Summary file': 0,  # Suppress summary file
+            'Major print level': 0,  # Minimal output
+            'Minor print level': 0,  # Minimal output
+            'Solution': 'No',  # Don't print solution
+            'System information': 'No',  # Don't print system info
+            'Print frequency': 0,  # Disable iteration output
+            'Verify level': 0  # Disable verification output
+        }
     csv_file = f"test cases/{WD}/python_results.csv"
 
-df = pd.read_csv(csv_file)
-header_df = pd.DataFrame(columns=['idx', 'avg pos error (mm)', 'avg ori error (rad)', 'average control rate', 'finished'])
-header_df.to_csv(csv_file, index=False)
-from VelocityControllers import VelocityController
-from utils import *
+if SAVE:
+    df = pd.read_csv(csv_file)
+    header_df = pd.DataFrame(columns=['idx', 'avg pos error (mm)', 'avg ori error (rad)', 'average control rate', 'finished'])
+    header_df.to_csv(csv_file, index=False)
 
-with open(f"test cases/{WD}/test.yaml") as file:
+with open(f"test cases/{WD}/test.yaml") as param_file:
     try:
-        params = yaml.safe_load(file)
+        params = yaml.safe_load(param_file)
     except yaml.YAMLError as exc:
         print(exc)
 
@@ -81,6 +97,36 @@ TIME_SCALE = params['TIME_SCALE']
 
 ########################################################################################################################
 
+@contextmanager
+def stdout_redirected(to=os.devnull):
+    '''
+    import os
+
+    with stdout_redirected(to=filename):
+        print("from Python")
+        os.system("echo non-Python applications are also supported")
+    '''
+    fd = sys.stdout.fileno()
+
+    ##### assert that Python and C stdio write using the same file descriptor
+    ####assert libc.fileno(ctypes.c_void_p.in_dll(libc, "stdout")) == fd == 1
+
+    def _redirect_stdout(to):
+        sys.stdout.close() # + implicit flush()
+        os.dup2(to.fileno(), fd) # fd writes to 'to' file
+        sys.stdout = os.fdopen(fd, 'w') # Python writes to fd
+
+    with os.fdopen(os.dup(fd), 'w') as old_stdout:
+        with open(to, 'w') as file:
+            _redirect_stdout(to=file)
+        try:
+            yield # allow code to be run with the redirected stdout
+        finally:
+            _redirect_stdout(to=old_stdout) # restore stdout.
+                                            # buffering and flags such as
+                                            # CLOEXEC may be different
+
+
 if __name__ == '__main__':
     xb_locs = np.loadtxt('xb_init.txt')
     counter = 0
@@ -109,24 +155,36 @@ if __name__ == '__main__':
         # Create optimisers
         vel_cont = VelocityController(UB, LB, NDIM, len(obstacles), W=W)  # QP controller
         xd_prev = np.zeros((NDIM,))  # Used to store prev vel  TODO: piecewise first derivative? See Boyd Lec10
+        if not JULIA:
+            if SOLVER == "snopt":
+                to_ = os.devnull
+            elif SOLVER == "ipopt":
+                to_ = sys.stdout
 
-        if JULIA:
-            create_shapes = Main.include("create_shapes.jl")
-            get_α_J = Main.include("get_α_J.jl")
-            create_shapes()
-        else:
-            x_star = [xa_init + xb_init.tolist() for xb_init in obstacles]
-            lambda_star = [(0, 0), (0, 0)]
-            calculators = []
-            for xb_init in obstacles:
-                calculators.append(MinDist3D(ca=list(xa_init), cb=list(xb_init),
-                                             ra=Ra, rb=Rb, eps_a=eps_a, eps_b=eps_b,
-                                             qa=list(qa_init), qb=list(qb_init)))
-            # Obtain the optimal solutions before the control loop
-            for o in range(len(obstacles)):
-                calculators[o].set_params(ca=list(x_opt_curr), cb=list(obstacles[o]),
-                                          qa=list(qa_curr), qb=list(qb_init))
-                x_star[o], lambda_star[o] = calculators[o].get_primal_dual_solutions(x_star[o], lambda_star[o])
+        with stdout_redirected(to_):
+            if JULIA:
+                create_shapes = Main.include("create_shapes.jl")
+                get_α_J = Main.include("get_α_J.jl")
+                create_shapes()
+            else:
+                x_star = [xa_init + xb_init.tolist() for xb_init in obstacles]
+                lambda_star = [(0, 0), (0, 0)]
+                calculators = []
+                for xb_init in obstacles:
+                    calculators.append(MinDist3D(ca=list(xa_init), cb=list(xb_init),
+                                                 ra=Ra, rb=Rb, eps_a=eps_a, eps_b=eps_b,
+                                                 qa=list(qa_init), qb=list(qb_init), solver=SOLVER))
+                # Obtain the optimal solutions before the control loop
+                for o in range(len(obstacles)):
+                    calculators[o].set_params(ca=list(x_opt_curr), cb=list(obstacles[o]),
+                                              qa=list(qa_curr), qb=list(qb_init))
+                    x_star[o], lambda_star[o] = calculators[o].get_primal_dual_solutions(x_star[o])
+
+                calculators = []
+                for xb_init in obstacles:
+                    calculators.append(MinDist3D(ca=list(xa_init), cb=list(xb_init),
+                                                 ra=Ra, rb=Rb, eps_a=eps_a, eps_b=eps_b,
+                                                 qa=list(qa_init), qb=list(qb_init), solver=SOLVER, solver_options=solver_options))
 
         # Control loop
         toc = 0  # To measure control rate
@@ -143,18 +201,24 @@ if __name__ == '__main__':
             G_opt = np.zeros((len(obstacles), NDIM+1))
 
             # Calculate h and hdot for each obstacle
-            for o in range(len(obstacles)):
-                if JULIA:
-                    alpha, da_dp = get_α_J(np.array([*x_opt_curr, *obstacles[o]]), np.array([*qa_curr, *qb_init]))
-                    # https://github.com/BolunDai0216/DifferentiableOptimizationCBF/issues/6#issuecomment-2708300188
-                    h_opt[o] = GAMMA * (alpha - BETA)
-                    G_opt[o] = -np.array(da_dp[:7])
-                else:
-                    calculators[o].set_params(ca=list(x_opt_curr), cb=list(obstacles[o]),
-                                              qa=list(qa_curr), qb=list(qb_init))
-                    x_star[o], lambda_star[o] = calculators[o].get_primal_dual_solutions(x_star[o], lambda_star[o])
-                    h_opt[o] = GAMMA * calculators[o].get_optimal_value()
-                    G_opt[o] = -np.array(calculators[o].sensitivity_analysis())
+            with stdout_redirected(to_):
+                for o in range(len(obstacles)):
+                    if JULIA:
+                        alpha, da_dp = get_α_J(np.array([*x_opt_curr, *obstacles[o]]), np.array([*qa_curr, *qb_init]))
+                        # https://github.com/BolunDai0216/DifferentiableOptimizationCBF/issues/6#issuecomment-2708300188
+                        h_opt[o] = GAMMA * (alpha - BETA)
+                        G_opt[o] = -np.array(da_dp[:7])
+                    else:
+                        calculators[o].set_params(ca=list(x_opt_curr), cb=list(obstacles[o]),
+                                                  qa=list(qa_curr), qb=list(qb_init))
+                        # x_star[o], lambda_star[o] = calculators[o].get_primal_dual_solutions(x_star[o], lambda_star[o])
+                        x_star[o], lambda_star[o] = calculators[o].get_primal_dual_solutions(x_star[o], lambda_star[o])
+                        # print(calculators[o].get_optimal_value())
+                        # print(calculators[o].get_solver_stats()["return_status"])
+                        # print(calculators[o].get_solver_stats()["success"])
+                        h_opt[o] = GAMMA * calculators[o].get_optimal_value()
+                        G_opt[o] = -np.array(calculators[o].sensitivity_analysis())
+
             vel_cont.set_param(vel, xd_prev, G_opt, h_opt, UnitQuaternion(qa_curr))  # TODO: change this to be the orientation of the specific obstacle
             xd_opt_des = vel_cont.get_solution()
             xd_prev = xd_opt_des
