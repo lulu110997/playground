@@ -4,10 +4,12 @@ import time
 import numpy as np
 import sympy
 import casadi
+if casadi.__version__ != "3.7.0":
+    raise "incorrect casadi version! Casadi 3.7.0 is required"
 
 class MinDist:
 
-    def __init__(self, ca, cb, ra, rb, eps_a, eps_b, x_bounds=None, ipopt_options=None):
+    def __init__(self, ca, cb, ra, rb, eps_a, eps_b, **kwargs):
         """
         Parent class for calculating minimum distance between two superquadrics
         Args:
@@ -40,16 +42,13 @@ class MinDist:
         self.objective = casadi.norm_2(self.xa - self.xb)
 
         self.G_BOUNDS = (-1.0, 1e-10)  # Bounds for the constraint
-        if x_bounds is None:
-            self.X_BOUNDS = (-10.0, 10.0)
-        else:
-            self.X_BOUNDS = x_bounds  # Bounds for the optimal points
+        self.X_BOUNDS = kwargs.get("x_bounds", (-10.0, 10.0))  # Bounds for the optimal points
 
-        if ipopt_options is None:
-            self.ipopt_options = {"linear_solver":"mumps", "sb":"yes", "print_level":0, "tol": 1e-6}
-        else:
-            self.ipopt_options = ipopt_options
-
+        # Solver and solver options
+        self.solver = kwargs.get("solver", "ipopt")
+        self.solver_options = kwargs.get("solver_options", {})
+        self.casadi_options = kwargs.get("casadi_options", {"verbose": False, "print_time":0, "record_time": True,
+                                                            "jit": True, self.solver: self.solver_options})
         self.params = None
         self.nlp = None
 
@@ -112,7 +111,7 @@ class MinDist3D(MinDist):
     """
     Class for calculating the minimum distance between two ellipse type shapes
     """
-    def __init__(self, ca, cb, ra, rb, eps_a, eps_b, qa, qb, x_bounds=None, ipopt_options=None):
+    def __init__(self, ca, cb, ra, rb, eps_a, eps_b, qa, qb, **kwargs):
         """
         Args:
             ca, cb: Tuple[float] | Represents the centre position (xyz) of each superquadric in the world frame
@@ -122,7 +121,7 @@ class MinDist3D(MinDist):
             x_bounds: List[float] | Represents the bounds on the optimal points
             ipopt_options: dict | options for ipopt
         """
-        super().__init__(ca, cb, ra, rb, eps_a, eps_b, x_bounds, ipopt_options)
+        super().__init__(ca, cb, ra, rb, eps_a, eps_b, **kwargs)
         # Initialise params for this problem
         self.qa = qa
         self.qb = qb
@@ -166,12 +165,12 @@ class MinDist3D(MinDist):
         # Inside-outside function in the world frame as the constraint
         # Change abs(x) to sqrt(x**2 + eps) to improve Hessian calculation (less NaNs)
         # The eps value is used to smooth out the derivatives
-        xa_w = (casadi.sqrt(xrot_a**2 + 1e-2) / self.ra[0]) ** (2 / self.eps_a[1])
-        ya_w = (casadi.sqrt(yrot_a**2 + 1e-2) / self.ra[1]) ** (2 / self.eps_a[1])
-        za_w = (casadi.sqrt(zrot_a**2 + 1e-2) / self.ra[2]) ** (2 / self.eps_a[0])
-        xb_w = (casadi.sqrt(xrot_b**2 + 1e-2) / self.rb[0]) ** (2 / self.eps_b[1])
-        yb_w = (casadi.sqrt(yrot_b**2 + 1e-2) / self.rb[1]) ** (2 / self.eps_b[1])
-        zb_w = (casadi.sqrt(zrot_b**2 + 1e-2) / self.rb[2]) ** (2 / self.eps_b[0])
+        xa_w = (casadi.sqrt(xrot_a**2 + 5e-4) / self.ra[0]) ** (2 / self.eps_a[1])
+        ya_w = (casadi.sqrt(yrot_a**2 + 5e-4) / self.ra[1]) ** (2 / self.eps_a[1])
+        za_w = (casadi.sqrt(zrot_a**2 + 5e-4) / self.ra[2]) ** (2 / self.eps_a[0])
+        xb_w = (casadi.sqrt(xrot_b**2 + 5e-4) / self.rb[0]) ** (2 / self.eps_b[1])
+        yb_w = (casadi.sqrt(yrot_b**2 + 5e-4) / self.rb[1]) ** (2 / self.eps_b[1])
+        zb_w = (casadi.sqrt(zrot_b**2 + 5e-4) / self.rb[2]) ** (2 / self.eps_b[0])
 
         # Concatenate constraints into a vector
         c1 = casadi.cse(((xa_w + ya_w) ** (self.eps_a[1] / self.eps_a[0])) + za_w - 1)
@@ -183,8 +182,7 @@ class MinDist3D(MinDist):
 
         # Define the nlp problem and set the solver
         nlp = {"x": self.decision_vars, "f": self.objective, "g": constraints, "p": problem_pars}
-        self.nlp = casadi.nlpsol("S", "ipopt", nlp,
-                                 {"verbose": False, "print_time":0, "record_time": True, "jit": True, "ipopt":self.ipopt_options})
+        self.nlp = casadi.nlpsol("S", self.solver, nlp, self.casadi_options)
 
     def _get_nabla_L(self):
         """
@@ -215,7 +213,6 @@ class MinDist3D(MinDist):
         f1_diff = nu_a*sympy.Matrix([f1.diff(ca[0]), f1.diff(ca[1]), f1.diff(ca[2]),
                                       f1.diff(qa_vec[0]), f1.diff(qa_vec[1]), f1.diff(qa_vec[2]), f1.diff(qa_vec[3])])
         self.nabla_L = sympy.lambdify((ca, ra, eps_a, qa_vec, xa, nu_a), expr=f1_diff, cse=True)
-
 
     def set_params(self, ca, cb, qa, qb):
         """
@@ -290,9 +287,6 @@ class MinDist3DTransl(MinDist):
             ((xa_w + ya_w)**(self.eps_a[1]/self.eps_a[0])) + za_w - 1.0 <= 0,
             ((xb_w + yb_w)**(self.eps_b[1]/self.eps_b[0])) + zb_w - 1.0 <= 0
         ]
-
-        # Problem
-        # self.prob = casadi.Problem(self.objective, self.constraints)
 
     def sensitivity_analysis(self):
         """

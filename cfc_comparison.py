@@ -1,6 +1,8 @@
 import math
 import sys
 import time
+import os
+os.environ["SNOPT_LICENSE"] = "/home/louis/licenses/snopt7.lic"
 
 import matplotlib.pyplot as plt
 import yaml
@@ -10,18 +12,31 @@ from casadi_min_dist import MinDist3D
 import pandas as pd
 from superquadric import SuperquadricObject
 
-ipopt_options = {"linear_solver":"ma27", "hsllib":"/usr/local/lib/libcoinhsl.so", "sb":"yes",
-                 "print_level":0, "timing_statistics":"yes"
-                 ,"bound_relax_factor": 1e-9
-                 ,"mu_init": 0.02
-                 ,"barrier_tol_factor": 15
-                 ,"bound_frac": 0.3
-                 # ,"bound_push": 0.0015
-                 ,"slack_bound_frac": 0.2
-                 ,"slack_bound_push": 0.1
-                 }
+SOLVER = "ipopt"
 
-# plt.ion()
+if SOLVER == "ipopt":
+    # "hsllib":"/usr/local/lib/libcoinhsl.so",
+    solver_options = {"linear_solver":"ma27", "sb":"yes",
+                     "print_level":0 ,"timing_statistics":"yes" , "tol":1e-6
+                     , "bound_relax_factor": 1e-9
+                     , "mu_init": 0.05
+                     , "bound_push": 1e-4
+                     , "bound_frac": 0.2
+                     , "slack_bound_push": 1e-4
+                     , "slack_bound_frac": 0.2
+                     }
+else:
+    solver_options = {
+                      'Summary file': 0,  # Suppress summary file
+                      'Major print level': 0,  # Minimal output
+                      'Minor print level': 0,  # Minimal output
+                      'Solution': 'No',  # Don't print solution
+                      'System information': 'No',  # Don't print system info
+                      'Print frequency': 0 , # Disable iteration output
+                      # 'Print No': None,  # Disable all printing
+                      'Verify level': 0  # Disable verification output
+                     }
+
 TEST_TYPE = 'compare with tracy'
 TEST_DIR = 'test1'
 TEST_NAME = 'test1'
@@ -59,8 +74,7 @@ cfc_ls_results = pd.read_csv("/home/louis/Git/playground/test cases/compare with
 cfc_lscn_results = pd.read_csv("/home/louis/Git/playground/test cases/compare with CFC/SQ-SQ/bench_result_SQ_SQ_CFCLeastSquaresCommonNormal.csv")
 cfc_fp_results = pd.read_csv("/home/louis/Git/playground/test cases/compare with CFC/SQ-SQ/bench_result_SQ_SQ_CFCFixedPoint.csv")
 is_collision = fcl_results["is_collision"].to_numpy()
-cant_solve = [4, 22, 33, 34, 36, 71, 83, 121, 123, 142, 145, 158, 170, 193, 198, 201, 219, 220, 222, 224, 228, 237,
-              253, 256, 289, 294, 328, 339, 342, 357, 362, 391, 394, 398]
+cant_solve = [410]
 
 ########################################################################################################################
 if __name__ == '__main__':
@@ -86,15 +100,17 @@ if __name__ == '__main__':
                    s2.get_poi(*(s1.get_pose()[0]), scale=0.7).tolist())
         calc = MinDist3D(ca=list(sq1_x[idx]), cb=list(sq2_x[idx]), ra=list(sq1_r[idx]), rb=list(sq2_r[idx]),
                          eps_a=list(sq1_e[idx]), eps_b=list(sq2_e[idx]), qa=list(sq1_q[idx]), qb=list(sq2_q[idx]),
-                         x_bounds=(-40,40), ipopt_options=ipopt_options)
+                         x_bounds=(-40,40), solver=SOLVER, solver_options=solver_options)
         x_star, __ = calc.get_primal_dual_solutions(x_guess)
         stats = calc.get_solver_stats()
-        iter_count.append(stats["iter_count"])
         t_wall.append(stats["t_wall_total"]*1000)
         our_d = calc.get_optimal_value()
+        # print(calc.get_solver_stats()['success'])
+        # print(calc.get_solver_stats()['return_status'])
 
         if not calc.get_solver_stats()['success']:
             could_not_solve.append(idx)
+            # input()
             # s1_sol = fcl_results.loc[idx, ['closest_point_s1_x', 'closest_point_s1_y', 'closest_point_s1_z']].to_numpy()
             # s2_sol = fcl_results.loc[idx, ['closest_point_s2_x', 'closest_point_s2_y', 'closest_point_s2_z']].to_numpy()
             # ax = plt.subplot(111, projection='3d')
@@ -132,11 +148,9 @@ if __name__ == '__main__':
     print("cfc_ls_error error's std: ", np.std(cfc_ls_error))
     print("cfc_lscn_error error: ", np.mean(cfc_lscn_error))
     print("cfc_fp_error error: ", np.mean(cfc_fp_error))
-    print("our average iterations: ", np.mean(iter_count))
     print("our average query time: ", np.mean(t_wall))
 
-
     fig = plt.figure(figsize =(10, 7))
-
-    plt.boxplot([our_error, cfc_ls_error])
+    plt.scatter(our_error, range(len(our_error)), color='blue', marker='o', alpha=0.5)
+    plt.scatter(cfc_ls_error, range(len(our_error)), color='red', marker='x', alpha=0.5)
     plt.show()
