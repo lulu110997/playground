@@ -1,7 +1,6 @@
 import numpy as np
 import argparse
 import time
-from contextlib import contextmanager
 import yaml
 import os
 from roboticstoolbox.tools import trajectory
@@ -29,7 +28,7 @@ else:
     # Some docs for warm starting IPOPT
     # https://github.com/casadi/casadi/wiki/FAQ%3A-Warmstarting-with-IPOPT
     # https://www.gams.com/latest/docs/S_IPOPT.html#IPOPT_WARMSTART
-    SOLVER = "snopt"
+    SOLVER = "ipopt"
     if SOLVER == "ipopt":
         solver_options = {"linear_solver":"ma27", "sb":"yes", "print_level":0,
                          "tol": 1e-6 , "warm_start_init_point":"yes" , "warm_start_bound_push": 1e-9,
@@ -96,37 +95,6 @@ SIM_END = params['SIM_END']
 TIME_SCALE = params['TIME_SCALE']
 
 ########################################################################################################################
-
-@contextmanager
-def stdout_redirected(to=os.devnull):
-    '''
-    import os
-
-    with stdout_redirected(to=filename):
-        print("from Python")
-        os.system("echo non-Python applications are also supported")
-    '''
-    fd = sys.stdout.fileno()
-
-    ##### assert that Python and C stdio write using the same file descriptor
-    ####assert libc.fileno(ctypes.c_void_p.in_dll(libc, "stdout")) == fd == 1
-
-    def _redirect_stdout(to):
-        sys.stdout.close() # + implicit flush()
-        os.dup2(to.fileno(), fd) # fd writes to 'to' file
-        sys.stdout = os.fdopen(fd, 'w') # Python writes to fd
-
-    with os.fdopen(os.dup(fd), 'w') as old_stdout:
-        with open(to, 'w') as file:
-            _redirect_stdout(to=file)
-        try:
-            yield # allow code to be run with the redirected stdout
-        finally:
-            _redirect_stdout(to=old_stdout) # restore stdout.
-                                            # buffering and flags such as
-                                            # CLOEXEC may be different
-
-
 if __name__ == '__main__':
     xb_locs = np.loadtxt('xb_init.txt')
     counter = 0
@@ -155,13 +123,8 @@ if __name__ == '__main__':
         # Create optimisers
         vel_cont = VelocityController(UB, LB, NDIM, len(obstacles), W=W)  # QP controller
         xd_prev = np.zeros((NDIM,))  # Used to store prev vel  TODO: piecewise first derivative? See Boyd Lec10
-        if not JULIA:
-            if SOLVER == "snopt":
-                to_ = os.devnull
-            elif SOLVER == "ipopt":
-                to_ = sys.stdout
 
-        with stdout_redirected(to_):
+        with stdout_redirected():
             if JULIA:
                 create_shapes = Main.include("create_shapes.jl")
                 get_α_J = Main.include("get_α_J.jl")
@@ -201,7 +164,7 @@ if __name__ == '__main__':
             G_opt = np.zeros((len(obstacles), NDIM+1))
 
             # Calculate h and hdot for each obstacle
-            with stdout_redirected(to_):
+            with stdout_redirected():
                 for o in range(len(obstacles)):
                     if JULIA:
                         alpha, da_dp = get_α_J(np.array([*x_opt_curr, *obstacles[o]]), np.array([*qa_curr, *qb_init]))
@@ -251,7 +214,7 @@ if __name__ == '__main__':
             finished = 0
         else:
             finished = 1
-        print((toc/STEPS)*1000)
+        # print((toc/STEPS)*1000)
         df_values = (counter, avg_pos_err*1000, avg_ori_err, (toc/STEPS)*1000, finished)
         new_row = pd.DataFrame([{'idx': df_values[0], 'average pos error (mm)': df_values[1],
                                  'average ori error (rad)': df_values[2], 'average control rate': df_values[3],

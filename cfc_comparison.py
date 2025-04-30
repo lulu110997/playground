@@ -2,8 +2,6 @@ import math
 import sys
 import time
 import os
-os.environ["SNOPT_LICENSE"] = "/home/louis/licenses/snopt7.lic"
-
 import matplotlib.pyplot as plt
 import yaml
 from utils import *
@@ -12,9 +10,10 @@ from casadi_min_dist import MinDist3D
 import pandas as pd
 from superquadric import SuperquadricObject
 
-SOLVER = "ipopt"
+SOLVER = "snopt"
 
 if SOLVER == "ipopt":
+    GUESS_SCALE = 0.7
     # "hsllib":"/usr/local/lib/libcoinhsl.so",
     solver_options = {"linear_solver":"ma27", "sb":"yes",
                      "print_level":0 ,"timing_statistics":"yes" , "tol":1e-6
@@ -26,6 +25,8 @@ if SOLVER == "ipopt":
                      , "slack_bound_frac": 0.2
                      }
 else:
+    os.environ["SNOPT_LICENSE"] = "/home/louis/licenses/snopt7.lic"
+    GUESS_SCALE = 0.97
     solver_options = {
                       'Summary file': 0,  # Suppress summary file
                       'Major print level': 0,  # Minimal output
@@ -33,7 +34,6 @@ else:
                       'Solution': 'No',  # Don't print solution
                       'System information': 'No',  # Don't print system info
                       'Print frequency': 0 , # Disable iteration output
-                      # 'Print No': None,  # Disable all printing
                       'Verify level': 0  # Disable verification output
                      }
 
@@ -96,17 +96,16 @@ if __name__ == '__main__':
 
         s1 = SuperquadricObject(*sq1_r[idx], *sq1_e[idx], pos=sq1_x[idx], quat=list(sq1_q[idx]))
         s2 = SuperquadricObject(*sq2_r[idx], *sq2_e[idx], pos=sq2_x[idx], quat=list(sq2_q[idx]))
-        x_guess = (s1.get_poi(*(s2.get_pose()[0]), scale=0.7).tolist() +
-                   s2.get_poi(*(s1.get_pose()[0]), scale=0.7).tolist())
+        x_guess = (s1.get_poi(*(s2.get_pose()[0]), scale=GUESS_SCALE).tolist() +
+                   s2.get_poi(*(s1.get_pose()[0]), scale=GUESS_SCALE).tolist())
         calc = MinDist3D(ca=list(sq1_x[idx]), cb=list(sq2_x[idx]), ra=list(sq1_r[idx]), rb=list(sq2_r[idx]),
                          eps_a=list(sq1_e[idx]), eps_b=list(sq2_e[idx]), qa=list(sq1_q[idx]), qb=list(sq2_q[idx]),
                          x_bounds=(-40,40), solver=SOLVER, solver_options=solver_options)
-        x_star, __ = calc.get_primal_dual_solutions(x_guess)
+        with stdout_redirected():
+            x_star, __ = calc.get_primal_dual_solutions(x_guess)
         stats = calc.get_solver_stats()
         t_wall.append(stats["t_wall_total"]*1000)
         our_d = calc.get_optimal_value()
-        # print(calc.get_solver_stats()['success'])
-        # print(calc.get_solver_stats()['return_status'])
 
         if not calc.get_solver_stats()['success']:
             could_not_solve.append(idx)
@@ -128,8 +127,8 @@ if __name__ == '__main__':
             # ax.scatter(*s2_sol, color='black')
             # ax.set_aspect('equal')
             # plt.show()
-        #
-        #     continue
+            # continue
+
         base_d = fcl_results['distance'][idx]
         cfc_ls_d = cfc_ls_results['distance'][idx]
         cfc_lscn_d = cfc_lscn_results['distance'][idx]
@@ -151,6 +150,6 @@ if __name__ == '__main__':
     print("our average query time: ", np.mean(t_wall))
 
     fig = plt.figure(figsize =(10, 7))
-    plt.scatter(our_error, range(len(our_error)), color='blue', marker='o', alpha=0.5)
-    plt.scatter(cfc_ls_error, range(len(our_error)), color='red', marker='x', alpha=0.5)
+    plt.scatter(range(len(our_error)), our_error, color='blue', marker='o', alpha=0.5)
+    plt.scatter(range(len(our_error)), cfc_ls_error, color='red', marker='x', alpha=0.5)
     plt.show()
