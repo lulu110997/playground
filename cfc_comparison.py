@@ -4,13 +4,14 @@ import time
 import os
 import matplotlib.pyplot as plt
 import yaml
+from tqdm import tqdm
 from utils import *
 import numpy as np
 from casadi_min_dist import MinDist3D
 import pandas as pd
 from superquadric import SuperquadricObject
 
-SOLVER = "snopt"
+SOLVER = "ipopt"
 
 if SOLVER == "ipopt":
     GUESS_SCALE = 0.7
@@ -24,7 +25,7 @@ if SOLVER == "ipopt":
                      , "slack_bound_push": 1e-4
                      , "slack_bound_frac": 0.2
                      }
-else:
+elif SOLVER == "snopt":
     os.environ["SNOPT_LICENSE"] = "/home/louis/licenses/snopt7.lic"
     GUESS_SCALE = 0.97
     solver_options = {
@@ -36,6 +37,21 @@ else:
                       'Print frequency': 0 , # Disable iteration output
                       'Verify level': 0  # Disable verification output
                      }
+elif SOLVER == "knitro":
+    os.environ["ARTELYS_LICENSE"] = "/home/louis/licenses/"
+    GUESS_SCALE = 0.7
+    # 1	Interior/Barrier (default), 2 Active Set SQP, 3	Interior/Barrier + Active Set, 4 Interior/Barrier + Direct Step
+    # 5	Feasibility Restoration Phase
+    solver_options = {
+        "outlev": 0,
+        "algorithm": 0,
+        # 'xtol': 1e-6,       # Feasibility tolerance (primal feasibility)
+        # 'ftol': 1e-6,       # Relative function (objective) tolerance
+        # 'opttol': 1e-6,     # Optimality tolerance (KKT conditions)
+        # 'feastol': 1e-6,    # Constraint violation tolerance
+    }
+else:
+    raise "Solver type is not supported"
 
 TEST_TYPE = 'compare with tracy'
 TEST_DIR = 'test1'
@@ -53,26 +69,26 @@ with open(f"test cases/{WD}/test.yaml") as file:
         print(exc)
 
 ndim = 6  # for 3D transl and rotation
-
+SQ_dir = "SQ-SQ-2022-08-03" # SQ-SQ
 # Load params for sq1
-sq1 = pd.read_csv('/home/louis/Git/playground/test cases/compare with CFC/SQ-SQ/bench_config_SQ_s1.csv')
+sq1 = pd.read_csv(f'/home/louis/Git/playground/test cases/compare with CFC/{SQ_dir}/bench_config_SQ_s1.csv')
 sq1_r = sq1.loc[:, ["Semi_a", "Semi_b", "Semi_c"]].to_numpy()
 sq1_e = sq1.loc[:, ["Epsilon_1", "Epsilon_2"]].to_numpy()
 sq1_x = sq1.loc[:, ["Pos_x","Pos_y","Pos_z"]].to_numpy()
 sq1_q = sq1.loc[:, ["Quat_1","Quat_2","Quat_3","Quat_4"]].to_numpy()
 
 # Load params for sq2
-sq2 = pd.read_csv('/home/louis/Git/playground/test cases/compare with CFC/SQ-SQ/bench_config_SQ_s2.csv')
+sq2 = pd.read_csv(f'/home/louis/Git/playground/test cases/compare with CFC/{SQ_dir}/bench_config_SQ_s2.csv')
 sq2_r = sq2.loc[:, ["Semi_a", "Semi_b", "Semi_c"]].to_numpy()
 sq2_e = sq2.loc[:, ["Epsilon_1", "Epsilon_2"]].to_numpy()
 sq2_x = sq2.loc[:, ["Pos_x","Pos_y","Pos_z"]].to_numpy()
 sq2_q = sq2.loc[:, ["Quat_1","Quat_2","Quat_3","Quat_4"]].to_numpy()
 
 # Load results from FCL
-fcl_results = pd.read_csv("/home/louis/Git/playground/test cases/compare with CFC/SQ-SQ/bench_result_SQ_SQ_FCL.csv")
-cfc_ls_results = pd.read_csv("/home/louis/Git/playground/test cases/compare with CFC/SQ-SQ/bench_result_SQ_SQ_CFCLeastSquares.csv")
-cfc_lscn_results = pd.read_csv("/home/louis/Git/playground/test cases/compare with CFC/SQ-SQ/bench_result_SQ_SQ_CFCLeastSquaresCommonNormal.csv")
-cfc_fp_results = pd.read_csv("/home/louis/Git/playground/test cases/compare with CFC/SQ-SQ/bench_result_SQ_SQ_CFCFixedPoint.csv")
+fcl_results = pd.read_csv(f"/home/louis/Git/playground/test cases/compare with CFC/{SQ_dir}/bench_result_SQ_SQ_FCL.csv")
+cfc_ls_results = pd.read_csv(f"/home/louis/Git/playground/test cases/compare with CFC/{SQ_dir}/bench_result_SQ_SQ_CFCLeastSquares.csv")
+cfc_lscn_results = pd.read_csv(f"/home/louis/Git/playground/test cases/compare with CFC/{SQ_dir}/bench_result_SQ_SQ_CFCLeastSquaresCommonNormal.csv")
+cfc_fp_results = pd.read_csv(f"/home/louis/Git/playground/test cases/compare with CFC/{SQ_dir}/bench_result_SQ_SQ_CFCFixedPoint.csv")
 is_collision = fcl_results["is_collision"].to_numpy()
 cant_solve = [410]
 
@@ -89,7 +105,7 @@ if __name__ == '__main__':
     t_wall = []
     iter_count = []
     in_collision = 0
-    for idx in range(sq1.shape[0]):
+    for idx in tqdm(range(sq1.shape[0])):
         if is_collision[idx] == 1:
             in_collision +=1
             continue
@@ -138,18 +154,38 @@ if __name__ == '__main__':
         cfc_lscn_error.append(100*math.fabs(base_d-cfc_lscn_d)/base_d)
         cfc_fp_error.append(100*math.fabs(base_d-cfc_fp_d)/base_d)
 
+        if cfc_fp_results["is_collision"][idx]:
+            print(idx)
+
     print("# of shapes not in collision: ", sq1.shape[0] - in_collision)
     print("# of pairs that could not be solved: ", len(could_not_solve))
     print(could_not_solve)
-    print("our error: ", np.mean(our_error))
-    print("cfc_ls_error error: ", np.mean(cfc_ls_error))
-    print("our error's std: ", np.std(our_error))
-    print("cfc_ls_error error's std: ", np.std(cfc_ls_error))
-    print("cfc_lscn_error error: ", np.mean(cfc_lscn_error))
-    print("cfc_fp_error error: ", np.mean(cfc_fp_error))
-    print("our average query time: ", np.mean(t_wall))
+
+    print("#### ERROR COMPARISONS (%) ####")
+    print("our error: ", np.round(np.mean(our_error), 2), "%")
+    print("cfc_ls_error error: ", np.round(np.mean(cfc_ls_error), 2), "%")
+    print("cfc_lscn_error error: ", np.round(np.mean(cfc_lscn_error), 2), "%")
+    print("cfc_fp_error error: ", np.round(np.mean(cfc_fp_error), 2), "%")
+
+    print("#### STDDEV COMPARISONS ####")
+    print("our error's std: ", np.round(np.std(our_error), 2))
+    print("cfc_ls error's std: ", np.round(np.std(cfc_ls_error), 2))
+    print("cfc_lscn error's std: ", np.round(np.std(cfc_lscn_error), 2))
+    print("cfc_fp error's std: ", np.round(np.std(cfc_fp_error), 2))
+
+    print("#### TIME COMPARISONS (ms) ####")
+    print("our average query time: ", np.round(np.mean(t_wall), 2))
+    print("cfc_ls average query time: ", np.round(np.mean(cfc_ls_results["time_query"].to_numpy()), 2))
+    print("cfc_lscn average query time: ", np.round(np.mean(cfc_lscn_results["time_query"].to_numpy()), 2))
+    print("cfc_fp average query time: ", np.round(np.mean(cfc_fp_results["time_query"].to_numpy()), 2))
+
 
     fig = plt.figure(figsize =(10, 7))
-    plt.scatter(range(len(our_error)), our_error, color='blue', marker='o', alpha=0.5)
-    plt.scatter(range(len(our_error)), cfc_ls_error, color='red', marker='x', alpha=0.5)
-    plt.show()
+    plt.scatter(range(len(our_error)), our_error, color='black', marker='o', alpha=0.5, label="our error")
+    plt.scatter(range(len(our_error)), cfc_ls_error, color='red', marker='x', alpha=0.5, label="cfc_ls_error")
+    plt.scatter(range(len(our_error)), cfc_lscn_error, color='green', marker='v', alpha=0.5, label="cfc_lscn_error")
+    plt.scatter(range(len(our_error)), cfc_fp_error, color='blue', marker='.', alpha=0.5, label="cfc_fp_error")
+    plt.legend()
+    plt.grid()
+    plt.savefig("cfc_comparison.svg")
+    # plt.show()

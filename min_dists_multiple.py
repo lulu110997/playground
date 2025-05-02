@@ -270,45 +270,76 @@ class MinDistMulti3D(MinDistMulti):
 import os
 from superquadric import SuperquadricObject
 import matplotlib.pyplot as plt
+from scipy.spatial.transform import Rotation
 
-SOLVER = "snopt"
+# SOLVER = "knitro"
+SOLVER = "ipopt"
+# SOLVER = "snopt"
 
 if SOLVER == "ipopt":
     GUESS_SCALE = 0.7
     # "hsllib":"/usr/local/lib/libcoinhsl.so",
-    solver_options = {"linear_solver":"ma27", "sb":"yes",
+    solver_options = {"linear_solver":"ma57", "sb":"yes",
                      "print_level":0 ,"timing_statistics":"yes" , "tol":1e-6
-                     , "bound_relax_factor": 1e-9
-                     , "mu_init": 0.05
-                     , "bound_push": 1e-4
-                     , "bound_frac": 0.2
-                     , "slack_bound_push": 1e-4
-                     , "slack_bound_frac": 0.2
+                     # , "bound_relax_factor": 1e-9
+                     # , "mu_init": 0.05
+                     # , "bound_push": 1e-4
+                     # , "bound_frac": 0.2
+                     # , "slack_bound_push": 1e-4
+                     # , "slack_bound_frac": 0.2
                      }
-else:
+elif SOLVER == "snopt":
     os.environ["SNOPT_LICENSE"] = "/home/louis/licenses/snopt7.lic"
     GUESS_SCALE = 0.97
     solver_options = {
-                      'Summary file': 0,  # Suppress summary file
-                      'Major print level': 0,  # Minimal output
-                      'Minor print level': 0,  # Minimal output
-                      'Solution': 'No',  # Don't print solution
-                      'System information': 'No',  # Don't print system info
-                      'Print frequency': 0 , # Disable iteration output
-                      'Verify level': 0  # Disable verification output
+        'Summary file': 0,  # Suppress summary file
+        'Major print level': 0,  # Minimal output
+        'Minor print level': 0,  # Minimal output
+        'Solution': 'No',  # Don't print solution
+        'System information': 'No',  # Don't print system info
+        'Print frequency': 0 , # Disable iteration output
+        'Verify level': 0  # Disable verification output
                      }
+elif SOLVER == "knitro":
+    os.environ["ARTELYS_LICENSE"] = "/home/louis/licenses/"
+    GUESS_SCALE = 0.97
+    # 1	Interior/Barrier (default), 2 Active Set SQP, 3	Interior/Barrier + Active Set, 4 Interior/Barrier + Direct Step
+    # 5	Feasibility Restoration Phase
+    solver_options = {
+        "outlev": 1,
+        "algorithm": 0,
+
+        # 'xtol': 1e-6,       # Feasibility tolerance (primal feasibility)
+        # 'ftol': 1e-6,       # Relative function (objective) tolerance
+        # 'opttol': 1e-6,     # Optimality tolerance (KKT conditions)
+        # 'feastol': 1e-6,    # Constraint violation tolerance
+    }
+else:
+    raise "Given solver is not supported"
 
 ee_p = {"c": [0, 0, 0],
         "q": [1, 0, 0, 0],
         "r": [0.1, 0.1, 0.1],
         "eps": [1.0, 1.0]}
 
-obs_p = [{"c": [0.3, 0.3, 0.3], "q": [1, 0, 0, 0], "r": [0.1, 0.1, 0.1], "eps": [0.2, 1.0]},
-         {"c": [-0.3, 0.35, 0.3], "q": [1, 0, 0, 0], "r": [0.1, 0.1, 0.1], "eps": [0.5, 1.0]},
-         {"c": [0.3, -0.35, 0.3], "q": [1, 0, 0, 0], "r": [0.1, 0.1, 0.1], "eps": [1.0, 0.8]},
-         {"c": [0.3, 0.35, -0.3], "q": [1, 0, 0, 0], "r": [0.1, 0.1, 0.1], "eps": [1.0, 0.2]},
-         {"c": [0.3, -0.35, -0.3], "q": [1, 0, 0, 0], "r": [0.1, 0.1, 0.1], "eps": [0.2, 0.2]},
-         {"c": [-0.3, -0.35, -0.3], "q": [1, 0, 0, 0], "r": [0.11, 0.12, 0.15], "eps": [1.0, 1.0]}]
+NUM_OBS = 100
+
+np.random.seed(9)
+
+eps1 = np.random.uniform(0.1, 2.0, size=NUM_OBS)
+eps2 = np.random.uniform(0.1, 1.5, size=NUM_OBS)
+random_ori = Rotation.random(NUM_OBS)
+random_xyz = np.random.uniform(-5, 5, size=(NUM_OBS, 3))
+random_rad = np.random.uniform(0.1, 0.5, size=(NUM_OBS, 3))
+obs_p = []
+
+for idx, q in enumerate(random_ori):
+    ori = q.as_quat().tolist()
+    ori = (ori[-1], ori[0], ori[1], ori[2])
+    pos = random_xyz[idx].tolist()
+    rad = random_rad[idx].tolist()
+    obs_p.append({"c": pos, "q": ori, "r": rad, "eps": [eps1[idx], eps2[idx]]})
+
 sq = [SuperquadricObject(*ee_p["r"], *ee_p["eps"], ee_p["c"], ee_p["q"])]
 for i in obs_p:
     sq.append(SuperquadricObject(*i["r"], *i["eps"], i["c"], i["q"]))
@@ -321,18 +352,74 @@ for s in sq[1:]:
     ee_guess.extend(sq[0].get_poi(*(s.get_pose()[0]), scale=GUESS_SCALE).tolist())
     obs_guess.extend(s.get_poi(*(sq[0].get_pose()[0]), scale=GUESS_SCALE).tolist())
 
-obj = MinDistMulti3D(ee_p, obs_p, solver=SOLVER, solver_options=solver_options)
+obj = MinDistMulti3D(ee_p, obs_p, solver=SOLVER, solver_options=solver_options, x_bounds=(-7, 7))
+tic = time.time()
 x, __ = obj.get_primal_dual_solutions(ee_guess+obs_guess)
+toc = 1000*(time.time()-tic)
 s = obj.get_solver_stats()
-print("time (ms):", s['t_wall_total']*1000)
-print("max freq:", 1/s['t_wall_total'])
+
+print("time (ms):", s['t_wall_total']*1000, toc)
+print("max freq (Hz):", 1/s['t_wall_total'])
 
 ax = plt.subplot(111, projection='3d')
-# ax.plot((x[0], x[9]), (x[1], x[10]), (x[2], x[11]), 'ro-')
-# ax.plot((x[3], x[12]), (x[4], x[13]), (x[5], x[14]), 'ro-')
-# ax.plot((x[6], x[15]), (x[7], x[16]), (x[8], x[17]), 'ro-')
+#
+# dec_vars = len(x)
+# split_num = dec_vars//2
+# three = 0
+# start=0
+# for i in range(0, len(x), 6):
+#     ax.plot((x[three], x[split_num+three]),
+#             (x[three+1], x[split_num+1+three]),
+#             (x[three+2], x[split_num+2+three]), 'ro-')
+#     three+=3
+#     if three > split_num-3:
+#         break
+#
+# sq[0].plot_sq(ax, 'green')
+# for s in sq[1:]:
+#     s.plot_sq(ax, 'red')
+# plt.show()
 
-sq[0].plot_sq(ax, 'green')
-for s in sq[1:]:
-    s.plot_sq(ax, 'red')
-plt.show()
+
+# obs_p = [{"c": [0.3, 0.3, 0.3], "q": [1, 0, 0, 0], "r": [0.1, 0.1, 0.1], "eps": [eps1[0], eps2[0]]},
+#          {"c": [-0.3, 0.35, 0.3], "q": [1, 0, 0, 0], "r": [0.1, 0.1, 0.0932], "eps": [eps1[1], eps2[1]]},
+#          {"c": [0.3, -0.35, 0.3], "q": [1, 0, 0, 0], "r": [0.1, 0.1, 0.1], "eps": [eps1[2], eps2[2]]},
+#          {"c": [0.3, 0.35, -0.3], "q": [1, 0, 0, 0], "r": [0.1, 0.1, 0.1], "eps": [eps1[3], eps2[3]]},
+#          {"c": [0.3, -0.35, -0.3], "q": [1, 0, 0, 0], "r": [0.1, 0.1, 0.1], "eps": [eps1[4], eps2[4]]},
+#          {"c": [-0.3, -0.35, 0.3], "q": [1, 0, 0, 0], "r": [0.1, 0.1, 0.1], "eps": [eps1[5], eps2[5]]},
+#          {"c": [-0.3, 0.35, -0.3], "q": [1, 0, 0, 0], "r": [0.1, 0.1, 0.1], "eps": [eps1[6], eps2[6]]},
+#          {"c": [-0.3, 0.0, -0.3], "q": [1, 0, 0, 0], "r": [0.1, 0.1, 0.1], "eps": [eps1[7], eps2[7]]},
+#
+#          {"c": [-1.3, 0.35, 0.3], "q": [1, 0, 0, 0], "r": [0.13, 0.12, 0.11], "eps": [eps1[8], eps2[8]]},
+#          {"c": [1.3, -0.35, 0.3], "q": [1, 0, 0, 0], "r": [0.13, 0.12, 0.115], "eps": [eps1[9], eps2[9]]},
+#          {"c": [1.3, 0.35, -0.3], "q": [1, 0, 0, 0], "r": [0.13, 0.12, 0.115], "eps": [eps1[10], eps2[10]]},
+#          {"c": [1.3, -0.35, -0.3], "q": [1, 0, 0, 0], "r": [0.13, 0.12, 0.115], "eps": [eps1[11], eps2[11]]},
+#          {"c": [-1.3, -0.35, 0.3], "q": [1, 0, 0, 0], "r": [0.13, 0.12, 0.115], "eps": [eps1[12], eps2[12]]},
+#          {"c": [-1.3, 0.35, -0.3], "q": [1, 0, 0, 0], "r": [0.13, 0.12, 0.115], "eps": [eps1[13], eps2[13]]},
+#          {"c": [-1.3, 0.0, -0.3], "q": [1, 0, 0, 0], "r": [0.13, 0.12, 0.115], "eps": [eps1[14], eps2[14]]},
+#
+#          {"c": [-1.3, 1.35, 0.3], "q": [1, 0, 0, 0], "r": [0.19, 0.12, 0.11], "eps": [eps1[15], eps2[15]]},
+#          {"c": [1.3, -1.35, 0.3], "q": [1, 0, 0, 0], "r": [0.19, 0.12, 0.15], "eps": [eps1[16], eps2[16]]},
+#          {"c": [1.3, 1.35, -0.3], "q": [1, 0, 0, 0], "r": [0.19, 0.12, 0.15], "eps": [eps1[17], eps2[17]]},
+#          {"c": [1.3, -1.35, -0.3], "q": [1, 0, 0, 0], "r": [0.19, 0.12, 0.15], "eps": [eps1[18], eps2[18]]},
+#          {"c": [-1.3, -1.35, 0.3], "q": [1, 0, 0, 0], "r": [0.19, 0.12, 0.15], "eps": [eps1[19], eps2[19]]},
+#          {"c": [-1.3, 1.35, -0.3], "q": [1, 0, 0, 0], "r": [0.19, 0.12, 0.15], "eps": [eps1[20], eps2[20]]},
+#          {"c": [-1.3, 1.0, -0.3], "q": [1, 0, 0, 0], "r": [0.19, 0.12, 0.15], "eps": [eps1[21], eps2[21]]},
+#
+#          {"c": [-1.3, 1.35, 1.3], "q": [1, 0, 0, 0], "r": [0.19, 0.12, 0.11], "eps": [eps1[22], eps2[22]]},
+#          {"c": [1.3, -1.35, 1.3], "q": [1, 0, 0, 0], "r": [0.19, 0.12, 0.15], "eps": [eps1[23], eps2[23]]},
+#          {"c": [1.3, 1.35, -1.3], "q": [1, 0, 0, 0], "r": [0.19, 0.12, 0.15], "eps": [eps1[24], eps2[24]]},
+#          {"c": [1.3, -1.35, -1.3], "q": [1, 0, 0, 0], "r": [0.19, 0.12, 0.15], "eps": [eps1[25], eps2[25]]},
+#          {"c": [-1.3, -1.35, 1.3], "q": [1, 0, 0, 0], "r": [0.19, 0.12, 0.15], "eps": [eps1[26], eps2[26]]},
+#          {"c": [-1.3, 1.35, -1.3], "q": [1, 0, 0, 0], "r": [0.19, 0.12, 0.15], "eps": [eps1[27], eps2[27]]},
+#          {"c": [-1.3, 1.0, -1.3], "q": [1, 0, 0, 0], "r": [0.19, 0.12, 0.15], "eps": [eps1[28], eps2[28]]},
+#
+#          {"c": [-1.3, 0.35, 1.3], "q": [1, 0, 0, 0], "r": [0.19, 0.12, 0.11], "eps": [eps1[29], eps2[29]]},
+#          {"c": [1.3, -0.35, 1.3], "q": [1, 0, 0, 0], "r": [0.19, 0.12, 0.15], "eps": [eps1[30], eps2[30]]},
+#          {"c": [1.3, 0.35, -1.3], "q": [1, 0, 0, 0], "r": [0.19, 0.12, 0.15], "eps": [eps1[31], eps2[31]]},
+#          {"c": [1.3, -0.35, -1.3], "q": [1, 0, 0, 0], "r": [0.19, 0.12, 0.15], "eps": [eps1[32], eps2[32]]},
+#          {"c": [-1.3, -0.35, 1.3], "q": [1, 0, 0, 0], "r": [0.19, 0.12, 0.15], "eps": [eps1[33], eps2[33]]},
+#          {"c": [-1.3, 0.35, -1.3], "q": [1, 0, 0, 0], "r": [0.19, 0.12, 0.15], "eps": [eps1[34], eps2[34]]},
+#          {"c": [-1.3, 0.0, -1.3], "q": [1, 0, 0, 0], "r": [0.19, 0.12, 0.15], "eps": [eps1[35], eps2[35]]},
+#
+#          {"c": [-1.3, -0.35, -0.3], "q": [1, 0, 0, 0], "r": [0.1, 0.12, 0.115], "eps": [eps1[-1], eps2[-1]]}]
