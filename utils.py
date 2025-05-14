@@ -91,13 +91,9 @@ def distance_derivative():
 
 @contextmanager
 def stdout_redirected(to=os.devnull):
-    '''
-    import os
-
-    with stdout_redirected(to=filename):
-        print("from Python")
-        os.system("echo non-Python applications are also supported")
-    '''
+    """
+    Code from stackoverflow. Supress outputs from C libraries
+    """
     fd = sys.stdout.fileno()
 
     ##### assert that Python and C stdio write using the same file descriptor
@@ -117,3 +113,11 @@ def stdout_redirected(to=os.devnull):
             _redirect_stdout(to=old_stdout) # restore stdout.
                                             # buffering and flags such as
                                             # CLOEXEC may be different
+
+def load_txt_as_generator(filepath):
+    """
+    Load txt file as a generator
+    """
+    with open(filepath, "r") as f:
+        for line in f:
+            yield np.fromstring(line, sep=' ')

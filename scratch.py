@@ -1,34 +1,52 @@
 import sys
-
+import os
 import numpy as np
+import open3d as o3d
+from superquadric import SuperquadricObject
+from scipy.spatial.transform import Rotation as R
+import matplotlib.pyplot as plt
+import plyfile
+import yaml
 
-def q_to_rot_matr(q0, q1, q2, q3):
-    return np.array([[2*(q0**2 + q1**2)-1, 2*(q1*q2-q0*q3), 2*(q1*q3+q0*q2)],
-                     [2*(q1*q2+q0*q3), 2*(q0**2 + q2**2) - 1, 2*(q2*q3 - q0*q1)],
-                     [2*(q1*q3 - q0*q2), 2*(q2*q3 + q0*q1), 2*(q0**2 + q3**2)-1]])
+root_dir = '/home/louis/Git/ycb-tools/models/ycb'
+model_dir = [os.path.join(root_dir, i) for i in os.listdir(root_dir)]
+STEP = 50
 
-def inside_outside_function(c, r, eps, x):
-    xa_w = (((x[0] - c[0]) / r[0]) ** (2.0 / eps[1]))
-    ya_w = (((x[1] - c[1]) / r[1]) ** (2.0 / eps[1]))
-    za_w = (((x[2] - c[2]) / r[2]) ** (2.0 / eps[0]))
-    return ((xa_w + ya_w) ** (eps[1] / eps[0])) + za_w - 1
+with open(f"ycb_sq_params_new.yaml") as file:
+    try:
+        params = yaml.safe_load(file)
+    except yaml.YAMLError as exc:
+        print(exc)
 
-print(q_to_rot_matr(0.9238795, 0, 0, -0.3826834))
-sys.exit()
-c = (-1, 0.5, -1.7)
-r = (1.25, 1.5, 1.15)
-eps = (1.8, 2)
-x = [-0.39641155, -0.22430613, -0.55]
-print(inside_outside_function(c, r, eps, x))
-##########################################
-c = (-1, -0.9, 0.9)
-r = (1, 1.2, 0.9)
-eps = (0.1, 1)
-x = [-1.34607501, -1.31957271,  1.02173112]
-print(inside_outside_function(c, r, eps, x))
+for d in model_dir:
+    p_temp = os.path.join(d, 'google_16k', 'nontextured.ply')
+    if not os.path.exists(p_temp):
+        p_temp = os.path.join(d, 'tsdf', 'nontextured.ply')
+    if not os.path.exists(p_temp):
+        p_temp = os.path.join(d, 'clouds', 'merged_cloud.ply')
+    if not os.path.exists(p_temp):
+        # for ._025_mug
+        continue
 
-c = (-1, 0.5, -1.7)
-r = (1.25, 1.5, 1.15)
-eps = (2, 2)
-x = [-1.34607501, -1.31957271,  1.02173112]
-print(inside_outside_function(c, r, eps, x))
+    model_name = d.split('/')[-1]
+    # if not "lock" in model_name:
+    #     continue
+    print("""""")
+    print(model_name, p_temp)
+
+    pcd = o3d.io.read_point_cloud(p_temp) # Read the point cloud
+    point_cloud_in_numpy = np.asarray(pcd.points)
+
+    shape = params[model_name]['eps']
+    scale = params[model_name]['radii']
+    quat = params[model_name]['quat']
+    pos = params[model_name]['pos']
+
+    print(shape)
+    s1 = SuperquadricObject(*scale, *shape, pos=pos, quat=quat)
+    ax = plt.subplot(111, projection='3d')
+    s1.plot_sq(plot_type='3D', ax=ax, colour="green")
+    ax.scatter(point_cloud_in_numpy[::STEP, 0], point_cloud_in_numpy[::STEP, 1], point_cloud_in_numpy[::STEP, 2])
+    ax.set_aspect('equal')
+
+    plt.show()

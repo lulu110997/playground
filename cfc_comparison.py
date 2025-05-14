@@ -62,12 +62,6 @@ SAVE = 1; sd = f'test cases/{TEST_TYPE}/{TEST_DIR}/{TEST_NAME}_'
 WD = 'compare with tracy'
 SAVE = 1; sd = f'test cases/{WD}/'
 
-with open(f"test cases/{WD}/test.yaml") as file:
-    try:
-        params = yaml.safe_load(file)
-    except yaml.YAMLError as exc:
-        print(exc)
-
 ndim = 6  # for 3D transl and rotation
 SQ_dir = "SQ-SQ-2022-08-03" # SQ-SQ
 # Load params for sq1
@@ -153,9 +147,6 @@ if __name__ == '__main__':
         cfc_ls_error.append(100*math.fabs(base_d-cfc_ls_d)/base_d)
         cfc_lscn_error.append(100*math.fabs(base_d-cfc_lscn_d)/base_d)
         cfc_fp_error.append(100*math.fabs(base_d-cfc_fp_d)/base_d)
-
-        if cfc_fp_results["is_collision"][idx]:
-            print(idx)
 
     print("# of shapes not in collision: ", sq1.shape[0] - in_collision)
     print("# of pairs that could not be solved: ", len(could_not_solve))

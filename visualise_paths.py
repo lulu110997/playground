@@ -9,10 +9,10 @@ from roboticstoolbox.tools import trajectory
 from spatialmath import SE3, SO3, UnitQuaternion
 from superquadric import SuperquadricObject
 
-RUN = 823
-YAML_PATH = '/home/louis/Git/playground/test cases/compare with tracy/test.yaml'
-JULIA_FILES = f'/home/louis/Git/playground/test cases/compare with tracy/RUN{RUN}_JULIA1/'
-PYTHON_FILES = f'/home/louis/Git/playground/test cases/compare with tracy/RUN{RUN}_JULIA0/'
+RUN = 998
+YAML_PATH = '/home/louis/Git/playground/test cases/comparative study 2/test.yaml'
+JULIA_FILES = f'/home/louis/Git/playground/test cases/comparative study 2/RUN{RUN}_JULIA1/'
+PYTHON_FILES = f'/home/louis/Git/playground/test cases/comparative study 2/RUN{RUN}_JULIA0/'
 
 with open(YAML_PATH) as file:
     try:
@@ -37,9 +37,10 @@ xa_init = params['xa_init']  # Initial robot position
 qa_init = params['qa_init']  # Initial robot orientation
 xa_tgt = params['xa_tgt']  # Final robot position`
 qa_tgt = params['qa_tgt']  # Final robot orientation
-xb_init = np.loadtxt('xb_init.txt')
+xb_init = np.loadtxt('xb_pos.txt')
 xb_init = xb_init[RUN, :3], xb_init[RUN, 3:]
-qb_init = params['qb_init']  # Obstacle orientation
+qb_init = np.loadtxt("xb_ori.txt")
+qb_init = qb_init[RUN, :4], qb_init[RUN, 4:]
 
 # Simulation parameters
 FREQ = params['FREQ']
@@ -67,8 +68,8 @@ xd_opt_history_p = np.load(PYTHON_FILES + f'xd_opt_history_{RUN}.npy')
 s1 = [SuperquadricObject(*Ra, *eps_a, pos=xa_init, quat=qa_init),
       SuperquadricObject(*Ra, *eps_a, pos=xa_init, quat=qa_init)]
 s2 = []
-for loc in xb_init:
-    s2.append(SuperquadricObject(*Rb, *eps_b, pos=loc, quat=qb_init))
+for n in range(2):
+    s2.append(SuperquadricObject(*Rb, *eps_b, pos=xb_init[n], quat=qb_init[n].tolist()))
 
 ax = plt.subplot(111, projection='3d')
 ax.set_xlabel('x-axis')
@@ -141,8 +142,8 @@ def simulate(idx):
 # ani = animation.FuncAnimation(fig=fig, func=simulate,
 #                               frames=range(SIM_START, SIM_END, int(TIME*TIME_SCALE)), repeat=False)
 # plt.close(); ani.save('A.mp4',fps=30, bitrate=-1); sys.exit()
-# for i in range(0, STEPS, int(TIME*TIME_SCALE)):
-    # simulate(i)
+for i in range(0, STEPS, int(TIME*TIME_SCALE)):
+    simulate(i)
 
 #  TODO: plot h, hd, v, omega, error, position
 # s1 = SuperquadricObject(*Ra, *eps_a, pos=xa_init, quat=qa_init)
@@ -175,12 +176,12 @@ cbf_ax.legend()
 # Velocities
 vel_fig, vel_ax = plt.subplots(2)
 vel_fig.suptitle('Velocities')
-vel_ax[0].plot(range(xd_opt_history_p.shape[0] - 1), np.round(xd_opt_history_p[1:, 0], 3), label="vx", lw=2)
-vel_ax[0].plot(range(xd_opt_history_p.shape[0] - 1), np.round(xd_opt_history_p[1:, 1], 3), label="vy", lw=2)
-vel_ax[0].plot(range(xd_opt_history_p.shape[0] - 1), np.round(xd_opt_history_p[1:, 2], 3), label="vz", lw=2)
-vel_ax[1].plot(range(xd_opt_history_p.shape[0] - 1), np.round(xd_opt_history_p[1:, 3], 3), label="wx", lw=2)
-vel_ax[1].plot(range(xd_opt_history_p.shape[0] - 1), np.round(xd_opt_history_p[1:, 4], 3), label="wy", lw=2)
-vel_ax[1].plot(range(xd_opt_history_p.shape[0] - 1), np.round(xd_opt_history_p[1:, 5], 3), label="wz", lw=2)
+vel_ax[0].plot(range(xd_opt_history_p.shape[0] - 1), np.round(xd_opt_history_j[1:, 0], 3), label="vx", lw=2)
+vel_ax[0].plot(range(xd_opt_history_p.shape[0] - 1), np.round(xd_opt_history_j[1:, 1], 3), label="vy", lw=2)
+vel_ax[0].plot(range(xd_opt_history_p.shape[0] - 1), np.round(xd_opt_history_j[1:, 2], 3), label="vz", lw=2)
+vel_ax[1].plot(range(xd_opt_history_p.shape[0] - 1), np.round(xd_opt_history_j[1:, 3], 3), label="wx", lw=2)
+vel_ax[1].plot(range(xd_opt_history_p.shape[0] - 1), np.round(xd_opt_history_j[1:, 4], 3), label="wy", lw=2)
+vel_ax[1].plot(range(xd_opt_history_p.shape[0] - 1), np.round(xd_opt_history_j[1:, 5], 3), label="wz", lw=2)
 vel_ax[0].legend(); vel_ax[1].legend()
 #
 # # Tracking error

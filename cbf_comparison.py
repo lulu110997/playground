@@ -1,15 +1,16 @@
+import sys; sys.path.append("/home/louis/Git/playground")  # Needed for when python-jl is used to run this script
+
+from roboticstoolbox.tools import trajectory
+from spatialmath import SE3
+from tqdm import tqdm
+from VelocityControllers import VelocityController
+from utils import *
 import numpy as np
+import os
 import argparse
 import time
 import yaml
-import os
-from roboticstoolbox.tools import trajectory
-from spatialmath import SE3
 import pandas as pd
-from tqdm import tqdm
-import sys; sys.path.append("/home/louis/Git/playground")  # Needed for when python-jl is used to run this script
-from VelocityControllers import VelocityController
-from utils import *
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--JULIA', action='store_true')
@@ -17,7 +18,7 @@ parser.set_defaults(JULIA=False)
 args = parser.parse_args()
 JULIA = args.JULIA
 
-WD = 'compare with tracy'
+WD = 'comparative study 2'
 SAVE = 1; sd = f'test cases/{WD}/'
 
 if JULIA is True:
@@ -96,22 +97,28 @@ TIME_SCALE = params['TIME_SCALE']
 
 ########################################################################################################################
 if __name__ == '__main__':
-    xb_locs = np.loadtxt('xb_init.txt')
+    xb_locs = load_txt_as_generator("xb_pos.txt")
+    xb_oris = load_txt_as_generator("xb_ori.txt")
     counter = 0
-    for row in tqdm(xb_locs):
-        obstacles = [row[:3], row[3:]]  # Store obstacle positions
+    n_obs = np.loadtxt("xb_pos.txt")[0].shape[0] // 3
+    n_sim = np.loadtxt("xb_pos.txt").shape[0]
 
-        # Create the trajectory
-        initial_pose = SE3(xa_init) @ UnitQuaternion(s=qa_init[0], v=qa_init[1:]).SE3()
-        final_pose = SE3(xa_tgt) @ UnitQuaternion(s=qa_tgt[0], v=qa_tgt[1:]).SE3()
-        x_traj = trajectory.ctraj(initial_pose, final_pose, STEPS)
+    # Create the trajectory
+    initial_pose = SE3(xa_init) @ UnitQuaternion(s=qa_init[0], v=qa_init[1:]).SE3()
+    final_pose = SE3(xa_tgt) @ UnitQuaternion(s=qa_tgt[0], v=qa_tgt[1:]).SE3()
+    x_traj = trajectory.ctraj(initial_pose, final_pose, STEPS)
+
+    for pos, ori in tqdm(zip(xb_locs, xb_oris), total=n_sim):
+        # Store obstacle pose
+        obs_locs = [pos[:3], pos[3:]]
+        obs_oris = [ori[:4], ori[4:]]
 
         # Histories
         x_opt_history = np.zeros((STEPS, NDIM + 1))
         xd_opt_history = np.zeros((STEPS, NDIM))
-        lagrange_history = np.zeros((STEPS, len(obstacles)))
-        optimisation_h_history = np.zeros((STEPS, len(obstacles)))
-        optimisation_hd_history = np.zeros((STEPS, len(obstacles), NDIM + 1))
+        lagrange_history = np.zeros((STEPS, n_obs))
+        optimisation_h_history = np.zeros((STEPS, n_obs))
+        optimisation_hd_history = np.zeros((STEPS, n_obs, NDIM + 1))
         tracking_err_history = np.zeros((STEPS, 2))
 
         x_opt_curr = np.array(xa_init)
@@ -121,7 +128,7 @@ if __name__ == '__main__':
         x_opt_history[0, 3:] = qa_init
 
         # Create optimisers
-        vel_cont = VelocityController(UB, LB, NDIM, len(obstacles), W=W)  # QP controller
+        vel_cont = VelocityController(UB, LB, NDIM, n_obs, W=W)  # QP controller
         xd_prev = np.zeros((NDIM,))  # Used to store prev vel  TODO: piecewise first derivative? See Boyd Lec10
 
         with stdout_redirected():
@@ -130,24 +137,23 @@ if __name__ == '__main__':
                 get_α_J = Main.include("get_α_J.jl")
                 create_shapes()
             else:
-                x_star = [xa_init + xb_init.tolist() for xb_init in obstacles]
+                x_star = [xa_init + xb_init.tolist() for xb_init in obs_locs]
                 lambda_star = [(0, 0), (0, 0)]
                 calculators = []
-                for xb_init in obstacles:
-                    calculators.append(MinDist3D(ca=list(xa_init), cb=list(xb_init),
+                for n in range(n_obs):
+                    calculators.append(MinDist3D(ca=list(xa_init), cb=list(obs_locs[n]),
                                                  ra=Ra, rb=Rb, eps_a=eps_a, eps_b=eps_b,
-                                                 qa=list(qa_init), qb=list(qb_init), solver=SOLVER))
-                # Obtain the optimal solutions before the control loop
-                for o in range(len(obstacles)):
-                    calculators[o].set_params(ca=list(x_opt_curr), cb=list(obstacles[o]),
-                                              qa=list(qa_curr), qb=list(qb_init))
-                    x_star[o], lambda_star[o] = calculators[o].get_primal_dual_solutions(x_star[o])
+                                                 qa=list(qa_init), qb=list(obs_oris[n]), solver=SOLVER))
+                    calculators[-1].set_params(ca=list(x_opt_curr), cb=list(obs_locs[n]),
+                                               qa=list(qa_curr), qb=list(obs_oris[n]))
+                    x_star[n], lambda_star[n] = calculators[-1].get_primal_dual_solutions(x_star[n])
 
+                # Reinitialise the solvers to have warm start settings
                 calculators = []
-                for xb_init in obstacles:
-                    calculators.append(MinDist3D(ca=list(xa_init), cb=list(xb_init),
+                for n in range(n_obs):
+                    calculators.append(MinDist3D(ca=list(xa_init), cb=list(obs_locs[n]),
                                                  ra=Ra, rb=Rb, eps_a=eps_a, eps_b=eps_b,
-                                                 qa=list(qa_init), qb=list(qb_init), solver=SOLVER, solver_options=solver_options))
+                                                 qa=list(qa_init), qb=list(obs_oris[n]), solver=SOLVER, solver_options=solver_options))
 
         # Control loop
         toc = 0  # To measure control rate
@@ -160,21 +166,20 @@ if __name__ == '__main__':
             vel = np.array(((Kv*x_error) / DT, (Kw*theta*a_hat) / DT)).reshape(6, 1)
 
             # Initialise variables to store h and hdot
-            h_opt = np.zeros((len(obstacles),))
-            G_opt = np.zeros((len(obstacles), NDIM+1))
+            h_opt = np.zeros((n_obs,))
+            G_opt = np.zeros((n_obs, NDIM+1))
 
             # Calculate h and hdot for each obstacle
             with stdout_redirected():
-                for o in range(len(obstacles)):
+                for o in range(n_obs):
                     if JULIA:
-                        alpha, da_dp = get_α_J(np.array([*x_opt_curr, *obstacles[o]]), np.array([*qa_curr, *qb_init]))
+                        alpha, da_dp = get_α_J(np.array([*x_opt_curr, *obs_locs[o]]), np.array([*qa_curr, *obs_oris[o]]))
                         # https://github.com/BolunDai0216/DifferentiableOptimizationCBF/issues/6#issuecomment-2708300188
                         h_opt[o] = GAMMA * (alpha - BETA)
                         G_opt[o] = -np.array(da_dp[:7])
                     else:
-                        calculators[o].set_params(ca=list(x_opt_curr), cb=list(obstacles[o]),
-                                                  qa=list(qa_curr), qb=list(qb_init))
-                        # x_star[o], lambda_star[o] = calculators[o].get_primal_dual_solutions(x_star[o], lambda_star[o])
+                        calculators[o].set_params(ca=list(x_opt_curr), cb=list(obs_locs[o]),
+                                                  qa=list(qa_curr), qb=list(obs_oris[o]))
                         x_star[o], lambda_star[o] = calculators[o].get_primal_dual_solutions(x_star[o], lambda_star[o])
                         # print(calculators[o].get_optimal_value())
                         # print(calculators[o].get_solver_stats()["return_status"])
@@ -230,3 +235,14 @@ if __name__ == '__main__':
             np.save(sp + f'optimisation_hd_history_{counter}.npy', optimisation_hd_history)
             np.save(sp + f'tracking_err_history_{counter}.npy', tracking_err_history)
         counter += 1
+
+    # Compute mean and stddev of pos/ori error and control rate, compute sum of finished column, save as a new file
+    if SAVE:
+        df = pd.read_csv(csv_file)
+        columns = ['avg pos error (mm)', 'avg ori error (rad)', 'average control rate']
+        mean_row = df[columns].mean()
+        std_row = df[columns].std()
+        finished_sum = pd.Series({'finished': df['finished'].sum()}, name='finished_sum')
+        mean_row['finished'] = df['finished'].sum()
+        df_stats = pd.concat([df, pd.DataFrame([mean_row, std_row])], axis=0)
+        df_stats.to_csv(csv_file, header=True, index=False)

@@ -1,14 +1,13 @@
-import math
-import sys
 from tqdm import tqdm
-import numpy as np
 import yaml
 from roboticstoolbox.tools import trajectory
 from spatialmath import SE3, UnitQuaternion
 from casadi_min_dist import MinDist3D
 from superquadric import SuperquadricObject
-import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d.art3d import Line3DCollection, Poly3DCollection
+from scipy.spatial.transform import Rotation
+import numpy as np
+import matplotlib.pyplot as plt
 
 def point_to_segment_distance(point, seg_start, seg_end):
     """
@@ -175,11 +174,10 @@ def rotation_matrix_from_line(p1, p2, up=np.array([0, 0, 1])):
     return R
 
 
-# TODO: Define NUM_SIM in yaml? or just as an arg?
 NUM_SIM = 1000
 NP_SEED = 9
 PLOT = 0
-SAVE = 0
+SAVE = 1
 TRAJ_D = 0.05  # Min dist of obstacle centre from traj
 SQ_D = 0.2  # Min dist between the two obstacles
 
@@ -218,24 +216,29 @@ final_pose = SE3(xa_tgt) @ UnitQuaternion(s=qa_tgt[0], v=qa_tgt[1:]).SE3()
 x_traj = trajectory.ctraj(initial_pose, final_pose, STEPS)
 x_traj_line_rot = rotation_matrix_from_line(x_traj[0].t, x_traj[-1].t)
 
+solver_options = {"linear_solver": "ma27", "sb": "yes", "print_level": 0, "tol": 1e-4}
+
 for i in tqdm(range(NUM_SIM)):
     while True:
         # Sample points
-        obstacles = [sample_point_from_rotated_box(c1, size, x_traj_line_rot),
+        obs_pos = [sample_point_from_rotated_box(c1, size, x_traj_line_rot),
                      sample_point_from_rotated_box(c1, size, x_traj_line_rot)]
+        random_ori = Rotation.random(2).as_quat()
+        ori1 = (random_ori[0][-1], random_ori[0][0], random_ori[0][1], random_ori[0][2])
+        ori2 = (random_ori[1][-1], random_ori[1][0], random_ori[1][1], random_ori[1][2])
 
-        calculator = MinDist3D(ca=list(obstacles[0]), cb=list(obstacles[1]), ra=Rb, rb=Rb, eps_a=eps_b, eps_b=eps_b,
-                               qa=list(qa_init), qb=list(qb_init))
-        x_star_, lambda_star_ = calculator.get_primal_dual_solutions(list(obstacles[0]) + list(obstacles[1]), [0, 0])
+        calculator = MinDist3D(ca=list(obs_pos[0]), cb=list(obs_pos[1]), ra=Rb, rb=Rb, eps_a=eps_b, eps_b=eps_b,
+                               qa=list(ori1), qb=list(ori2), solver_options=solver_options)
+        x_star_, lambda_star_ = calculator.get_primal_dual_solutions(list(obs_pos[0]) + list(obs_pos[1]), [0, 0])
         dist = calculator.get_optimal_value()
         solved = calculator.get_solver_stats()['success']
 
         if PLOT:
             fig = plt.figure()
             ax = fig.add_subplot(111, projection='3d')
-            s1 = SuperquadricObject(*Rb, *eps_b, pos=obstacles[0], quat=qb_init)
+            s1 = SuperquadricObject(*Rb, *eps_b, pos=obs_pos[0], quat=ori1)
             s1_handle = s1.plot_sq(ax, 'red')
-            s2 = SuperquadricObject(*Rb, *eps_b, pos=obstacles[1], quat=qb_init)
+            s2 = SuperquadricObject(*Rb, *eps_b, pos=obs_pos[1], quat=ori2)
             s2_handle = s2.plot_sq(ax, 'red')
             ax.plot(x_traj.t[:, 0], x_traj.t[:, 1], x_traj.t[:, 2], color='g')
             draw_rotated_bounding_box(c1, size, x_traj_line_rot, ax)
@@ -246,19 +249,24 @@ for i in tqdm(range(NUM_SIM)):
             ax.set_xlim(-1.0, 0.2)
             ax.set_ylim(-0.5, 0.5)
             ax.set_zlim(0.0, 0.55)
+            ax.set_aspect('equal')
+
             plt.show()
 
         # Ensure the point centre of SQ is some distance away from the obstacle and check that both shapes have a min
         # dist of 0.05 unit between each other
         # Distance between the two is too small OR Solution was not found, might be due to bad initial guess OR offset
         # the centre of one/both of the obstacle does not satisfy the minimum distance from the trajectory
-        if max(point_to_segment_distance(obstacles[0], xa_init, xa_tgt),
-               point_to_segment_distance(obstacles[1], xa_init, xa_tgt)) < TRAJ_D or dist < SQ_D or not solved:
+        if max(point_to_segment_distance(obs_pos[0], xa_init, xa_tgt),
+               point_to_segment_distance(obs_pos[1], xa_init, xa_tgt)) < TRAJ_D or dist < SQ_D or not solved:
             continue
         break
 
     # Append to file (as a single row)
     if SAVE:
-        with open('xb_init.txt', 'a') as f:
-            combined = np.concatenate([obstacles[0], obstacles[1]]).reshape(1, -1)
+        with open('xb_pos.txt', 'a') as f:
+            combined = np.concatenate([obs_pos[0], obs_pos[1]]).reshape(1, -1)
+            np.savetxt(f, combined)
+        with open('xb_ori.txt', 'a') as f:
+            combined = np.concatenate([ori1, ori2]).reshape(1, -1)
             np.savetxt(f, combined)

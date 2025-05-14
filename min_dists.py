@@ -236,7 +236,7 @@ class MinDist3DRot(MinDist):
         SQ_a_rotation = qa.to_rotation_matrix(homogeneous=True)
         SQ_a_pose = SQ_a_rotation.transpose() @ (sympy.Abs(xa - ca)).transpose()
 
-        xa_w = (SQ_a_pose[0] / ra[0]) ** (2.0 / eps_a[1])
+        xa_w = (c[0] / ra[0]) ** (2.0 / eps_a[1])
         ya_w = (SQ_a_pose[1] / ra[1]) ** (2.0 / eps_a[1])
         za_w = (SQ_a_pose[2] / ra[2]) ** (2.0 / eps_a[0])
         f1 = ((xa_w + ya_w) ** (eps_a[1] / eps_a[0])) + za_w - 1.0

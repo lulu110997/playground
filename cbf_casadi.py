@@ -16,10 +16,10 @@ TEST_TYPE = 'compare with tracy'
 TEST_DIR = 'test1'
 TEST_NAME = 'test1'
 REPLAY = 0; cwd = f'test cases/{TEST_TYPE}/{TEST_DIR}/{TEST_NAME}_'
-SAVE = 1; sd = f'test cases/{TEST_TYPE}/{TEST_DIR}/{TEST_NAME}_'
+SAVE = 0; sd = f'test cases/{TEST_TYPE}/{TEST_DIR}/{TEST_NAME}_'
 
 WD = 'compare with tracy'
-SAVE = 1; sd = f'test cases/{WD}/'
+SAVE = 0; sd = f'test cases/{WD}/'
 
 with open(f"test cases/{WD}/test.yaml") as file:
     try:
