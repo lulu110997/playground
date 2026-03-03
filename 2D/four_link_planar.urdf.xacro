@@ -1,0 +1,117 @@
+<?xml version="1.0"?>
+<robot name="four_link_planar"
+       xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:property name="L1" value="0.2"/>
+  <xacro:property name="L2" value="0.3"/>
+  <xacro:property name="L3" value="0.3"/>
+  <xacro:property name="L4" value="0.2"/>
+
+  <!-- ================= BASE LINK ================= -->
+  <link name="base_link"/>
+
+  <!-- ================= LINK 1 ================= -->
+  <link name="link1">
+    <visual>
+      <origin xyz="${L1/2} 0 0"/>
+      <geometry>
+        <box size="${L1} 0.05 0.05"/>
+      </geometry>
+      <material name="blue">
+        <color rgba="0 0 1 1"/>
+      </material>
+    </visual>
+  </link>
+
+  <joint name="joint1" type="revolute">
+    <parent link="base_link"/>
+    <child link="link1"/>
+    <origin xyz="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.14" upper="3.14" effort="10" velocity="2"/>
+  </joint>
+
+  <!-- ================= LINK 2 ================= -->
+  <link name="link2">
+    <visual>
+      <origin xyz="${L2/2} 0 0"/>
+      <geometry>
+        <box size="${L2} 0.05 0.05"/>
+      </geometry>
+      <material name="green">
+        <color rgba="0 1 0 1"/>
+      </material>
+    </visual>
+  </link>
+
+  <joint name="joint2" type="revolute">
+    <parent link="link1"/>
+    <child link="link2"/>
+    <origin xyz="${L1} 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.14" upper="3.14" effort="10" velocity="2"/>
+  </joint>
+
+  <!-- ================= LINK 3 ================= -->
+  <link name="link3">
+    <visual>
+      <origin xyz="${L3/2} 0 0"/>
+      <geometry>
+        <box size="${L3} 0.05 0.05"/>
+      </geometry>
+      <material name="red">
+        <color rgba="1 0 0 1"/>
+      </material>
+    </visual>
+  </link>
+
+  <joint name="joint3" type="revolute">
+    <parent link="link2"/>
+    <child link="link3"/>
+    <origin xyz="${L2} 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.14" upper="3.14" effort="10" velocity="2"/>
+  </joint>
+
+  <!-- ================= LINK 4 ================= -->
+  <link name="link4">
+    <visual>
+      <origin xyz="${L4/2} 0 0"/>
+      <geometry>
+        <box size="${L4} 0.05 0.05"/>
+      </geometry>
+      <material name="yellow">
+        <color rgba="1 1 0 1"/>
+      </material>
+    </visual>
+  </link>
+
+  <joint name="joint4" type="revolute">
+    <parent link="link3"/>
+    <child link="link4"/>
+    <origin xyz="${L3} 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.14" upper="3.14" effort="10" velocity="2"/>
+  </joint>
+
+
+  <!-- ================= TOOL LINK ================= -->
+  <link name="tool">
+    <visual>
+      <origin xyz="${L4/2} 0 0"/>
+      <geometry>
+        <box size="${L4} 0.03 0.03"/>
+      </geometry>
+      <material name="white">
+        <color rgba="1 1 1 1"/>
+      </material>
+    </visual>
+  </link>
+
+  <joint name="tool_joint" type="fixed">
+    <parent link="link4"/>
+    <child link="tool"/>
+    <origin xyz="${L4} 0 0"/>
+  </joint>
+
+</robot>
