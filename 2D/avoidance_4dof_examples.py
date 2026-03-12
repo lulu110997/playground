@@ -6,8 +6,10 @@ from spatialmath import UnitQuaternion, SE3
 
 import numpy as np
 
+from cbf_diff_sq import mindistcalcmulti
+from cbf_diff_sq import mindistcalc
 from cbf_diff_sq.superquadric import SuperquadricObject
-from cbf_diff_sq.velcont import JointVelocityController
+from cbf_diff_sq.velcont import JointVelocityController, VelocityController
 
 def wait_for_user(fig, key=None, timeout_pause=0.1):
     """
@@ -62,66 +64,6 @@ def orientation_error(Rd, Rc):
 
     return theta, axis
 
-# def ellipsoid_inside_outside(x, c, R, axes):
-#     """
-#     Inside-outside function of a rotated ellipsoid.
-#
-#     Parameters
-#     ----------
-#     x : (3,) array
-#         Query point
-#     c : (3,) array
-#         Ellipsoid centre
-#     R : (3,3) array
-#         Rotation matrix
-#     axes : (3,) array
-#         Semi-axis lengths [a, b, c]
-#
-#     Returns
-#     -------
-#     f : float
-#         Inside-outside value (negative inside, zero surface, positive outside)
-#     """
-#
-#     D = np.diag(1.0 / axes**2)
-#     A = R @ D @ R.T
-#
-#     d = x - c
-#     f = d.T @ A @ d - 1.0
-#
-#     return f
-#
-#
-# def ellipsoid_df_dc(x, c, R, axes):
-#     """
-#     Derivative of inside-outside function w.r.t. ellipsoid centre.
-#
-#     Parameters
-#     ----------
-#     x : (3,) array
-#         Query point
-#     c : (3,) array
-#         Ellipsoid centre
-#     R : (3,3) array
-#         Rotation matrix
-#     axes : (3,) array
-#         Semi-axis lengths [a, b, c]
-#
-#     Returns
-#     -------
-#     f : float
-#         Inside-outside value (negative inside, zero surface, positive outside)
-#
-#     """
-#
-#     D = np.diag(1.0 / axes**2)
-#     A = R @ D @ R.T
-#
-#     d = x - c
-#     grad_c = -2.0 * (A @ d)
-#
-#     return grad_c
-
 class planar_robot(rtb.Robot):
     """
     4dof 2D planar robot class
@@ -172,7 +114,7 @@ def pad_to_2x4(A):
     padded = np.pad(A, ((0, pad_rows), (0, pad_cols)), mode='constant')
     return padded
 
-def main(obs_pos, final_pose, robot, q_start, ee=False):
+def main(obs_pos, final_pose, robot, q_start, ee=False, use_ee_cont=False):
     # Link lengths (metres)
     link_lengths = [0.2, 0.3, 0.3, 0.2]
 
@@ -224,6 +166,10 @@ def main(obs_pos, final_pose, robot, q_start, ee=False):
     h = np.zeros((len(link_sqs), 1))
     nabla_h = np.zeros((len(link_sqs), robot.q.shape[0]))
 
+    ee_cont = VelocityController(ub=0.5, lb=-0.5, ndim=2, nconst=1, W=None, Ws=0)
+    h_ee = np.zeros((len(link_sqs), 1))
+    nabla_h_ee = np.zeros((len(link_sqs), 2))
+
     # Control loop
     # wait_for_user(plt.gcf(), key='w')
     plt.pause(1)
@@ -249,9 +195,17 @@ def main(obs_pos, final_pose, robot, q_start, ee=False):
             x = obs_pos - sqs.pos[:2]
             nabla_h[cbf_idx] = (-2*R@D@R.transpose()@x) @ pad_to_2x4(robot.jacob0(robot.q, end=link_names[cbf_idx], tool=tool_tr[cbf_idx])[:2])
 
-        vel_cont.set_param(xd_tgt=x_vel, G_matr=nabla_h, h_matr=h, robot_jac=jacob0); qd = vel_cont.get_solution()
+            if use_ee_cont:
+                h_ee[cbf_idx] = (sqs.inside_out_function(obs_pos[0], obs_pos[1], 0) - SAFETY_OFFSET)*GAMMA
+                nabla_h_ee[cbf_idx] = -2*R@D@R.transpose()@x
 
-        q_next = qd*DT + q_curr
+        if use_ee_cont:
+            ee_cont.set_param(xd_tgt=x_vel, G_matr=nabla_h_ee, h_matr=h_ee); xd_star = ee_cont.get_solution()
+            q_next = np.linalg.pinv(jacob0)@xd_star*DT + q_curr
+        else:
+            vel_cont.set_param(xd_tgt=x_vel, G_matr=nabla_h, h_matr=h, robot_jac=jacob0); qd = vel_cont.get_solution()
+            q_next = qd * DT + q_curr
+
         robot.q = q_next
 
         if not ee:
@@ -276,6 +230,7 @@ def main(obs_pos, final_pose, robot, q_start, ee=False):
             # print(f"Constraint Residual: {res:.2e}")
             # print(f"Estimated Barrier Potential: {barrier_val:.2e}")
             # print(vel_cont.prob.parameters)
+            print(nabla_h)
             for handles_idx in range(len(link_sq_handles)):
                 link_sq_handles[handles_idx].remove()
                 link_sq_handles[handles_idx] = link_sqs[handles_idx].plot_sq(ax, 'green')
@@ -384,18 +339,21 @@ if __name__ == '__main__':
     # ee_bool = 0
     # q_start = robot2d.qf
 
-    SIM_SKIP = 100
-    GAMMA = 0.1
-    SAFETY_OFFSET = 1.3  # Must be geq to 1
+    SIM_SKIP = 5
+    GAMMA = 10.2
+    SAFETY_OFFSET = 2.3  # Must be geq to 1
+    # GAMMA = 10.2
+    # SAFETY_OFFSET = 1.3  # Must be geq to 1
     obs_point = np.array([0.3, 0.21])
+    # obs_point = np.array([0.3, 0.25])
     goal_point = np.array([0.1, 0.2])
-    ee_bool = False
+    ee_bool = True
     Rd = np.array([
         [ 0., -1.,  0.],
         [1., 0.,  0.],
         [0.,  0.,  1. ]
     ])
-    start_pos = np.array([0.45, 0.2])
+    start_pos = np.array([0.45, 0.25])
 
     while True:
         _q_curr = robot2d.q
@@ -417,5 +375,11 @@ if __name__ == '__main__':
         if np.linalg.norm(_x_pose.t[:2] - start_pos) < 1e-6 and abs(_omega) < 1e-6:
             break
     q_start = robot2d.q
+    # [-0.88069189  0.3896134   2.0676252   0.19849643]
+    # [-0.87644388  0.37803702  2.08249127  0.17874347]
 
-    main(obs_point, goal_point, robot2d, q_start, ee=ee_bool)
+    main(obs_point, goal_point, robot2d, q_start, ee=ee_bool, use_ee_cont=0)
+
+
+    # nabla_d * J * qdot
+    # nabla_d: is normal to the obstacle/the level set of an obstacle
