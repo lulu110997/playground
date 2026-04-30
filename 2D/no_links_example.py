@@ -70,11 +70,16 @@ def main_traj(obs_pos, initial_pos, final_pos):
     ax.view_init(elev=90, azim=-90)
 
     # Set limits
-    ax.set_xlim(0.1, 0.5)
-    ax.set_ylim(0., 0.4)
+    ax.set_xlim(-0.1, 1.0)
+    ax.set_ylim(-0.35, 0.75)
     ax.set_zlim(-0.2, 0.2)
 
-    rob_sq = SuperquadricObject(a=0.05/2, b=0.15/2, c=0.01/2, eps1=1.0, eps2=1.0, pos=initial_pos, quat=(1,0,0,0))
+    # Set axis labels
+    ax.set_xlabel('X-axis')
+    ax.set_ylabel('Y-axis')
+    ax.set_zlabel('Z-axis')
+
+    rob_sq = SuperquadricObject(a=0.05/2, b=0.225/2, c=0.01/2, eps1=1.0, eps2=1.0, pos=initial_pos, quat=(1,0,0,0))
     robot_params = [{"c": rob_sq.pos.squeeze().tolist(), "r": rob_sq.get_abc(), "eps": rob_sq.get_eps(), "q": rob_sq.quat}]
     # rob_sq_handle = rob_sq.plot_sq(ax, colour="green")
 
@@ -92,24 +97,25 @@ def main_traj(obs_pos, initial_pos, final_pos):
     obs_params = [{"c": obs_sq.pos.squeeze().tolist(), "r": obs_sq.get_abc(), "eps": obs_sq.get_eps(), "q": obs_sq.quat}]
     dist_calc = MinDistMulti3D(robot_params, obs_params, io_eps=1e-16)
 
-    vel_cont = VelocityControllerWeighted(ub=MAX_VEL, lb=MIN_VEL, ndim=2)
+    vel_cont = VelocityControllerWeighted(ub=MAX_VEL, lb=MIN_VEL, ndim=2, customQ=customQ)
 
     x_optimal = None
     lam_g0 = False
     prev_vel = None
-
-    # Control loop
     robot_traj = rtb.ctraj(SE3(x=initial_pos[0], y=initial_pos[1], z=initial_pos[2]),
                            SE3(x=final_pos[0], y=final_pos[1], z=final_pos[2]), STEPS)
     x_curr = initial_pos
 
-    plt.show()
-    plt.pause(1)
+    # Histories for analysis
+    x_vel_history = np.full((2, STEPS-1), 0.)
+    Q_matrix_history = np.full((2, 2, STEPS-1), 0.)
+    h_history = np.full((1, STEPS-1), 0.)
 
+    # Control loop
     for control_idx in range(1, len(robot_traj)):
-        step_count = ax.text2D(0.05, 0.95, control_idx, transform=ax.transAxes,
+        step_count = ax.text2D(0.05, 0.95, f"{control_idx}/{len(robot_traj)}", transform=ax.transAxes,
                                fontsize=12, color='black')
-        next_pos = robot_traj[control_idx].t
+        next_pos = robot_traj[-1].t
         x_error = np.array(next_pos - x_curr)[:2]
         x_vel = x_error/DT
         dist_calc.set_robot_pose(ca=rob_sq.pos.squeeze().tolist(), qa=rob_sq.quat.elements.tolist())
@@ -117,15 +123,14 @@ def main_traj(obs_pos, initial_pos, final_pos):
         obs_points = x_optimal[3:]
         obs_normal = obs_sq.surface_normal(obs_points[0], obs_points[1], obs_points[2])
         obs_normal = obs_normal[:2]
-
+        # radians = np.arctan2(np.cross(x_vel, obs_normal), np.dot(x_vel, obs_normal))
+        # x_tan = math.exp(-100*dist_obs)*(x_vel - np.dot(x_vel, obs_normal))
+        # print(np.dot(x_vel, obs_normal))
 
         # Calculate safety function between the links and point obstacle
         dist_obs = dist_calc.get_distances()[0]
         h = (dist_obs - SAFETY_OFFSET) * GAMMA
         nabla_h = np.array(dist_calc.sensitivity_analysis()[:2])
-        # radians = np.arctan2(np.cross(x_vel, obs_normal), np.dot(x_vel, obs_normal))
-        # x_tan = math.exp(-100*dist_obs)*(x_vel - np.dot(x_vel, obs_normal))
-        # print(np.dot(x_vel, obs_normal))
         vel_cont.set_param(xd_tgt=x_vel, G_matr=nabla_h, h_matr=h)
         xd = vel_cont.get_solution()
         x_curr = np.append(xd, 0) * DT + x_curr
@@ -137,14 +142,14 @@ def main_traj(obs_pos, initial_pos, final_pos):
             # print("np." + repr(vel_cont.W.value) + ",")
             # print(np.linalg.eig(vel_cont.W.value).eigenvalues)
 
-        if control_idx % SIM_SKIP == 0 and control_idx > 0.2500:
+        if control_idx % SIM_SKIP == 0 and control_idx > PLOT_START:
             # Analyse solution
             normal_unit_vector = (nabla_h / np.linalg.norm(nabla_h)).reshape(2, 1)
             normal_proj = np.outer(normal_unit_vector, normal_unit_vector)
             tangent_proj = np.eye(2) - normal_proj
             xd_n, xd_t = xd @ normal_proj, xd @ tangent_proj
             # print(f"normal: {np.linalg.norm(xd_n)}, tangent: {np.linalg.norm(xd_t)}, distance:{h}")
-            print(h, np.linalg.eig(vel_cont.W.value).eigenvalues)
+            # print(h, np.linalg.eig(vel_cont.W.value).eigenvalues)
 
             # tangent (choose one direction)
             tx, ty = -obs_normal[1], obs_normal[0]
@@ -169,15 +174,15 @@ def main_traj(obs_pos, initial_pos, final_pos):
             normal_vector = ax.quiver(obs_points[0], obs_points[1], 0,
                                       obs_normal[0], obs_normal[1], 0, color='blue', length=dist_obs, normalize=True)
             velocity_vector = ax.quiver(rob_sq.pos[0], rob_sq.pos[1], 0,
-                                        xd[0], xd[1], 0, color='green', length=np.linalg.norm(xd)*10, normalize=True)
+                                        xd[0], xd[1], 0, color='green', length=np.linalg.norm(xd)*5, normalize=True)
 
             desired_pos_handle, = ax.plot(next_pos[0], next_pos[1], 0, 'bx')
-            robot_travelled_handle, = ax.plot(x_curr[0], x_curr[1], 0, 'gx')
+            ax.plot(x_curr[0], x_curr[1], 0, 'gx')
             rob_sq_handle = rob_sq.plot_sq(ax, 'green')
 
             # Show plots
             plt.draw()
-            plt.pause(0.001)
+            plt.pause(1e-16)
 
             # Remove handles
             normal_vector.remove()
@@ -187,30 +192,55 @@ def main_traj(obs_pos, initial_pos, final_pos):
             velocity_vector.remove()
             ellipsoid_handle.remove()
 
+        x_vel_history[:, control_idx-1] = xd
+        Q_matrix_history[:, :, control_idx-1] = vel_cont.W.value
+        h_history[:, control_idx-1] = h/GAMMA
             # velocity_vector_diff = np.dot(prev_vel, xd) / (np.linalg.norm(prev_vel) * np.linalg.norm(xd))
             # print(velocity_vector_diff)
 
         prev_vel = xd
         step_count.remove()
 
+    np.save(f"data/x_vel_history_Q{customQ}.npy", x_vel_history)
+    if customQ:
+        np.save("data/Q_matrix_history.npy", Q_matrix_history)
+        np.save("data/h_history.npy", h_history)
+
+    rob_sq.plot_sq(ax, 'green')
+    ax.plot([x0 - L * tx, x0 + L * tx],
+            [y0 - L * ty, y0 + L * ty],
+            color='blue')
+    plot_small_ellipsoid_from_metric(
+        ax=ax,
+        center=rob_sq.pos.squeeze(),
+        w_2d=vel_cont.W.value,
+        robot_abc=rob_sq.get_abc(),
+        scale=1.0,
+        z_radius=1e-6,
+        color="cyan",
+        alpha=0.9,
+    )
+
     plt.show(block=True)
 
 if __name__ == '__main__':
     FREQ = 100
     DT = 1/FREQ
-    TIME = 60
+    TIME = 40
     STEPS = int(TIME*FREQ)
-    MAX_VEL = 0.02
-    MIN_VEL = -0.02
-    SIM_SKIP = 11
+    MAX_VEL = 0.025
+    MIN_VEL = -0.025
+    SIM_SKIP = 73
     SAFETY_OFFSET = 1e-3
     GAMMA = 1.
+    PLOT_START = 0.2000
+    customQ = True
 
     # starting_point = np.array([0.9, 0.2, 0.]) is kinda a circle
-    starting_point = np.array([1.0045, 0.2, 0.])
-    # starting_point = np.array([0.45, 0.25, 0.])
+    starting_point = np.array([0.9, 0.2, 0.])
+    # starting_point = np.array([0.45, 0.2, 0.])
     goal_point = np.array([0.1, 0.2, 0.])
-    obs_point = np.array([0.3, 0.23, 1e-16])
+    obs_point = np.array([0.3, 0.18, 1e-16])
 
     # Test 2, north/south points giving different behaviour from west/east points
     # not eccentricity problem, tested with circle robot and sideways fat ellipse
@@ -220,9 +250,9 @@ if __name__ == '__main__':
     # obs_point = np.array([0.27, 0.2, 1e-16])
 
     # Test 3, robot changes direction??
-    starting_point = np.array([0.43, 0., 0.])
-    goal_point = np.array([0.3, 0.4, 0.])
-    obs_point = np.array([0.3, 0.2, 1e-16])
+    # starting_point = np.array([0.43, 0., 0.])
+    # goal_point = np.array([0.3, 0.4, 0.])
+    # obs_point = np.array([0.3, 0.2, 1e-16])
 
     main_traj(obs_point, starting_point, goal_point)
     # main_no_traj(obs_point, starting_point, goal_point)
