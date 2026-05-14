@@ -95,7 +95,17 @@ def main_traj(obs_pos, initial_pos, final_pos):
     ax.plot_surface(x, y, z, color="g")
 
     obs_params = [{"c": obs_sq.pos.squeeze().tolist(), "r": obs_sq.get_abc(), "eps": obs_sq.get_eps(), "q": obs_sq.quat}]
-    dist_calc = MinDistMulti3D(robot_params, obs_params, io_eps=1e-16)
+    dist_calc = MinDistMulti3D(robot_params, obs_params, io_eps=1e-16, x_bounds=(-10, 10), g_bounds=(-1e-3, 1e-3))
+    dist_calc.set_robot_pose(ca=rob_sq.pos.squeeze().tolist(), qa=rob_sq.quat.elements.tolist())
+    x_optimal, lam_g0 = dist_calc.get_primal_dual_solutions()
+    with open("ipopt_cfg.yaml") as param_file:
+        try:
+            solver_params = yaml.safe_load(param_file)
+            solver_options = solver_params["solver_options"]
+        except yaml.YAMLError as exc:
+            print(exc)
+    dist_calc = MinDistMulti3D(robot_params, obs_params, solver_options=solver_options,
+                               io_eps=1e-16, x_bounds=(-10, 10), g_bounds=(-1e-3, 1e-3))
 
     vel_cont = VelocityControllerWeighted(ub=MAX_VEL, lb=MIN_VEL, ndim=2, customQ=customQ)
 
